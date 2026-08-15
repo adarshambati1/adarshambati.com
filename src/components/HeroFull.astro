@@ -1,13 +1,12 @@
 ---
-import Constellation from './Constellation.astro';
-import HeroVisual from './HeroVisual.astro';
+import HeroScene from './HeroScene.astro';
 
 /**
- * Full-viewport dark hero: drifting point network behind, text left, the
- * robotics sim right.
+ * Full-viewport dark hero.
  *
- * No portrait — the sim carries the right-hand column instead, which is also
- * the one thing on the page that says "robotics" without needing to be read.
+ * The 3D scene fills the whole hero and the text sits on top of it — no split,
+ * no divider. A left-weighted scrim keeps the copy legible over whatever the
+ * scene happens to be doing behind it, without dimming the whole frame.
  */
 export interface Credential {
   readonly text: string;
@@ -27,6 +26,8 @@ interface Props {
   location?: string;
   credentials?: readonly Credential[];
   links?: readonly HeroLink[];
+  /** Pin the scene instead of choosing at random. */
+  scene?: 'auto' | 'cars' | 'arm';
 }
 
 const {
@@ -36,11 +37,13 @@ const {
   location = '',
   credentials = [],
   links = [],
+  scene = 'auto',
 } = Astro.props;
 ---
 
 <section class="hero">
-  <Constellation />
+  <HeroScene mode={scene} />
+  <div class="hero__scrim" aria-hidden="true"></div>
 
   <div class="hero__inner">
     <div class="hero__text">
@@ -96,10 +99,6 @@ const {
         )
       }
     </div>
-
-    <div class="hero__visual">
-      <HeroVisual size={320} />
-    </div>
   </div>
 
   <a class="hero__scroll" href="#about" aria-label="Scroll to about">
@@ -110,31 +109,51 @@ const {
 <style>
   .hero {
     position: relative;
-    /* dvh so mobile browser chrome doesn't crop the bottom of the hero. */
+    /* dvh so mobile browser chrome doesn't crop the bottom. */
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     align-items: center;
-    background: #08090d;
+    background: #080a10;
     color: #f2f4fa;
     overflow: hidden;
   }
 
+  /* Weighted to the left, and only as far as the text runs — the scene stays
+     fully visible on the right where it's composed. */
+  .hero__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        100deg,
+        rgba(8, 10, 16, 0.94) 0%,
+        rgba(8, 10, 16, 0.86) 26%,
+        rgba(8, 10, 16, 0.45) 48%,
+        rgba(8, 10, 16, 0) 68%
+      ),
+      linear-gradient(to bottom, rgba(8, 10, 16, 0.6) 0%, rgba(8, 10, 16, 0) 22%);
+  }
+
   .hero__inner {
     position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-8);
+    z-index: 2;
     width: 100%;
-    max-width: 64rem;
+    max-width: 76rem;
     margin: 0 auto;
     padding: var(--header-height) var(--space-6) var(--space-8);
+    /* The scene owns the pointer for dragging; only the copy takes clicks. */
+    pointer-events: none;
   }
 
   .hero__text {
-    min-width: 0;
+    max-width: 34rem;
+  }
+
+  .hero__text a {
+    pointer-events: auto;
   }
 
   .hero__eyebrow {
@@ -156,7 +175,6 @@ const {
   .hero__role {
     margin-top: var(--space-3);
     font-size: clamp(1.15rem, 2.2vw, 1.6rem);
-    font-weight: var(--weight-normal);
     color: #b9c4dc;
     letter-spacing: -0.015em;
   }
@@ -168,7 +186,7 @@ const {
   }
 
   .hero__creds {
-    max-width: 32rem;
+    max-width: 30rem;
     margin-top: var(--space-5);
     font-size: var(--text-sm);
     line-height: 1.6;
@@ -202,6 +220,7 @@ const {
     color: #dbe3f5;
     border: 1px solid rgba(219, 227, 245, 0.32);
     border-radius: 50%;
+    background: rgba(8, 10, 16, 0.4);
     text-decoration: none;
     transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
@@ -217,17 +236,12 @@ const {
     border-color: #dbe3f5;
   }
 
-  .hero__visual {
-    flex: none;
-  }
-
-  /* Scroll cue: a line that drifts down, hinting there's a page below the fold.
-     Without it a full-viewport hero reads as the whole site. */
+  /* A full-viewport hero otherwise reads as the whole site. */
   .hero__scroll {
     position: absolute;
     left: 50%;
     bottom: var(--space-5);
-    z-index: 1;
+    z-index: 2;
     width: 1px;
     height: 2.5rem;
     transform: translateX(-50%);
@@ -261,11 +275,11 @@ const {
 
   @media (max-width: 52rem) {
     .hero__inner {
-      flex-direction: column-reverse;
-      align-items: flex-start;
-      justify-content: center;
-      gap: var(--space-6);
       padding-top: calc(var(--header-height) + var(--space-6));
+    }
+    .hero__scrim {
+      background:
+        linear-gradient(to bottom, rgba(8, 10, 16, 0.92) 0%, rgba(8, 10, 16, 0.75) 52%, rgba(8, 10, 16, 0.25) 100%);
     }
   }
 </style>

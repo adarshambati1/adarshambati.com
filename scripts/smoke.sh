@@ -28,8 +28,8 @@ has "both emails present"   "$(curl -s $B/)" "adarsh1@stanford.edu"
 has "linkedin present"      "$(curl -s $B/)" "linkedin.com/in/adarshambati"
 chk "home is indexable"     "$(curl -s $B/ | grep -c noindex)" 0
 has "canonical set"         "$(curl -s $B/)" "adarshambati.com"
-has "hero visual present"   "$(curl -s $B/)" "data-hero-visual"
-has "constellation bg"      "$(curl -s $B/)" "data-constellation"
+has "scene readout"        "$(curl -s $B/)" "scene__readout"
+has "hero scene canvas"    "$(curl -s $B/)" "data-hero-scene"
 has "hero location"         "$(curl -s $B/)" "San Francisco Bay Area"
 has "hero social icons"     "$(curl -s $B/)" "hero__icon"
 # No portrait anywhere in the hero — the sim carries the right column.
