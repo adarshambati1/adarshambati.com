@@ -28,7 +28,13 @@ has "both emails present"   "$(curl -s $B/)" "adarsh1@stanford.edu"
 has "linkedin present"      "$(curl -s $B/)" "linkedin.com/in/adarshambati"
 chk "home is indexable"     "$(curl -s $B/ | grep -c noindex)" 0
 has "canonical set"         "$(curl -s $B/)" "adarshambati.com"
-has "scene readout"        "$(curl -s $B/)" "scene__readout"
+# The hero is the animation and nothing else — no readout, ticks, hint or
+# scroll cue. These guard against them creeping back.
+chk "no readout box"        "$(curl -s $B/ | grep -c 'scene__readout')" 0
+chk "no corner ticks"       "$(curl -s $B/ | grep -c 'scene__tick')" 0
+chk "no drag hint"          "$(curl -s $B/ | grep -c 'scene__hint')" 0
+chk "no scroll cue"         "$(curl -s $B/ | grep -c 'hero__scroll')" 0
+has "dark scrollbar"        "$(curl -s $B/)" "scrollbar-color"
 has "hero scene canvas"    "$(curl -s $B/)" "data-hero-scene"
 has "hero location"         "$(curl -s $B/)" "San Francisco Bay Area"
 has "hero social icons"     "$(curl -s $B/)" "hero__icon"

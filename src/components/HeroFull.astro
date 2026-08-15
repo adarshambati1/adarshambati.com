@@ -101,9 +101,6 @@ const {
     </div>
   </div>
 
-  <a class="hero__scroll" href="#about" aria-label="Scroll to about">
-    <span aria-hidden="true"></span>
-  </a>
 </section>
 
 <style>
@@ -234,43 +231,6 @@ const {
     color: #08090d;
     background: #dbe3f5;
     border-color: #dbe3f5;
-  }
-
-  /* A full-viewport hero otherwise reads as the whole site. */
-  .hero__scroll {
-    position: absolute;
-    left: 50%;
-    bottom: var(--space-5);
-    z-index: 2;
-    width: 1px;
-    height: 2.5rem;
-    transform: translateX(-50%);
-    overflow: hidden;
-  }
-
-  .hero__scroll span {
-    display: block;
-    width: 1px;
-    height: 100%;
-    background: linear-gradient(to bottom, transparent, rgba(219, 227, 245, 0.75));
-    animation: drift 2.4s ease-in-out infinite;
-  }
-
-  @keyframes drift {
-    0% {
-      transform: translateY(-100%);
-    }
-    60%,
-    100% {
-      transform: translateY(100%);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .hero__scroll span {
-      animation: none;
-      transform: none;
-    }
   }
 
   @media (max-width: 52rem) {

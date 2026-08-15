@@ -51,13 +51,15 @@ try {
   const { forward, solveIK, isSafe, CHAIN } = await import(pathToFileURL(compiled).href);
 
   const GRAPE_R = 0.028;
-  const SPOTS = [
-    [0.5, 0.16, GRAPE_R],
-    [0.42, -0.26, GRAPE_R],
-    [0.3, 0.34, GRAPE_R],
-    [0.54, -0.05, GRAPE_R],
+  const STATIONS = [
+    [0.52, 0.1, GRAPE_R],
+    [0.36, 0.4, GRAPE_R],
+    [0.02, 0.5, GRAPE_R],
+    [0.2, -0.44, GRAPE_R],
+    [0.5, -0.22, GRAPE_R],
   ];
-  const CYCLE = 7.6;
+  const HOVER = 0.17;
+  const CYCLE = 7.0;
   const REST = [0, 0.5, 0, 1.2, 0, 0.9, 0];
   const lerp = (a, b, t) => a + (b - a) * t;
   const ease = (t) => t * t * (3 - 2 * t);
@@ -65,17 +67,20 @@ try {
 
   // Mirrors armScene() in src/components/HeroScene.astro.
   function target(t) {
+    const n = Math.floor(t / CYCLE);
     const u = (t % CYCLE) / CYCLE;
-    const spot = SPOTS[Math.floor(t / CYCLE) % SPOTS.length];
-    const drop = [0.16, -0.46, GRAPE_R];
-    const home = [0.34, 0.02, 0.46];
-    const above = [spot[0], spot[1], spot[2] + 0.17];
-    if (u < 0.26) return mix(home, above, ease(u / 0.26));
-    if (u < 0.4) return mix(above, spot, ease((u - 0.26) / 0.14));
-    if (u < 0.48) return spot;
-    if (u < 0.68) return mix(spot, above, ease((u - 0.48) / 0.2));
-    if (u < 0.86) return mix(above, [drop[0], drop[1], drop[2] + 0.02], ease((u - 0.68) / 0.18));
-    return mix([drop[0], drop[1], drop[2] + 0.02], home, ease((u - 0.86) / 0.14));
+    const from = STATIONS[n % STATIONS.length];
+    const to = STATIONS[(n + 1) % STATIONS.length];
+    const overFrom = [from[0], from[1], from[2] + HOVER];
+    const overTo = [to[0], to[1], to[2] + HOVER];
+
+    if (u < 0.14) return mix(overFrom, from, ease(u / 0.14));
+    if (u < 0.22) return from;
+    if (u < 0.36) return mix(from, overFrom, ease((u - 0.22) / 0.14));
+    if (u < 0.64) return mix(overFrom, overTo, ease((u - 0.36) / 0.28));
+    if (u < 0.78) return mix(overTo, to, ease((u - 0.64) / 0.14));
+    if (u < 0.86) return to;
+    return mix(to, overTo, ease((u - 0.86) / 0.14));
   }
 
   const angles = [...REST];
@@ -84,7 +89,7 @@ try {
   let minZ = Infinity;
   let graspErr = 0;
   const FPS = 60;
-  const FRAMES = Math.round(CYCLE * 4 * FPS);
+  const FRAMES = Math.round(CYCLE * 5 * FPS);
 
   for (let f = 0; f < FRAMES; f++) {
     const t = f / FPS;
@@ -101,7 +106,7 @@ try {
     minZ = Math.min(minZ, tcp[2]);
 
     const u = (t % CYCLE) / CYCLE;
-    if (u >= 0.4 && u <= 0.68) {
+    if (u >= 0.22 && u <= 0.78) {
       graspErr = Math.max(graspErr, Math.hypot(tcp[0] - goal[0], tcp[1] - goal[1], tcp[2] - goal[2]));
     }
   }

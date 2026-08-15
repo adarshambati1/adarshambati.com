@@ -5,15 +5,13 @@
  *
  * Picks one of two scenes per visit, 50/50:
  *
- *   cars — a LiDAR point cloud of a street, ray-cast from a simulated spinning
- *          multi-beam sensor against a ground plane and oriented boxes. The
- *          rings, the shadows behind vehicles and the gap under each car all
- *          fall out of the cast; none of it is drawn by hand.
- *   arm  — a 7-DOF Kinova-style manipulator picking a grape, running forward
- *          kinematics with CCD inverse kinematics onto the target.
+ *   scan — a real PandaSet LiDAR frame, streamed as a quantised binary.
+ *   arm  — a Flexiv Rizon 4s picking a grape, running forward kinematics with
+ *          CCD inverse kinematics onto the target.
  *
- * Both are drag-to-rotate. The scene is composed right-of-centre so it doesn't
- * sit under the headline.
+ * No overlay chrome: the scene is the whole thing. Drag to rotate, shift-drag
+ * or shift-scroll to zoom, double-click to reset. Composed right-of-centre so
+ * it doesn't sit under the headline.
  */
 interface Props {
   /** Pin a scene instead of choosing at random. */
@@ -25,17 +23,6 @@ const { mode = 'auto' } = Astro.props;
 
 <div class="scene">
   <canvas class="scene__canvas" data-hero-scene data-mode={mode}></canvas>
-
-  <span class="scene__tick scene__tick--tr" aria-hidden="true"></span>
-  <span class="scene__tick scene__tick--br" aria-hidden="true"></span>
-
-  <dl class="scene__readout" aria-hidden="true">
-    <div><dt data-label="a">Source</dt><dd data-stat="a">—</dd></div>
-    <div><dt data-label="b">Points</dt><dd data-stat="b">—</dd></div>
-    <div><dt data-label="c">Range</dt><dd data-stat="c">—</dd></div>
-  </dl>
-
-  <p class="scene__hint" aria-hidden="true">drag to rotate · shift-drag to zoom</p>
 </div>
 
 <style>
@@ -57,85 +44,10 @@ const { mode = 'auto' } = Astro.props;
     cursor: grabbing;
   }
 
-  .scene__tick {
-    position: absolute;
-    width: 14px;
-    height: 14px;
-    border-color: rgba(160, 180, 225, 0.4);
-    border-style: solid;
-    pointer-events: none;
-  }
-
-  .scene__tick--tr {
-    top: calc(var(--header-height) + 20px);
-    right: 24px;
-    border-width: 1px 1px 0 0;
-  }
-
-  .scene__tick--br {
-    right: 24px;
-    bottom: 24px;
-    border-width: 0 1px 1px 0;
-  }
-
-  .scene__readout {
-    position: absolute;
-    right: 24px;
-    top: calc(var(--header-height) + 44px);
-    display: grid;
-    gap: 0.3rem;
-    margin: 0;
-    padding: 0.7rem 0.85rem;
-    font-size: 0.6875rem;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: rgba(190, 205, 235, 0.75);
-    background: rgba(8, 10, 16, 0.5);
-    border: 1px solid rgba(160, 180, 225, 0.16);
-    border-radius: 6px;
-    backdrop-filter: blur(4px);
-    pointer-events: none;
-  }
-
-  .scene__readout div {
-    display: flex;
-    justify-content: space-between;
-    gap: 1.75rem;
-  }
-
-  .scene__readout dt {
-    color: rgba(150, 168, 205, 0.7);
-  }
-
-  .scene__readout dd {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
-    color: rgba(215, 228, 255, 0.95);
-  }
-
-  .scene__hint {
-    position: absolute;
-    right: 24px;
-    bottom: 48px;
-    margin: 0;
-    font-size: 0.6875rem;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: rgba(160, 180, 225, 0.45);
-    pointer-events: none;
-  }
-
-  @media (max-width: 52rem) {
-    .scene__readout,
-    .scene__hint,
-    .scene__tick {
-      display: none;
-    }
-  }
 </style>
 
 <script>
-  import { forward as armFK, solveIK as armIK, MESHES, TRIANGLES, MODEL_NAME } from '../lib/rizon';
+  import { forward as armFK, solveIK as armIK, MESHES } from '../lib/rizon';
 
   type Vec3 = [number, number, number];
 
@@ -221,6 +133,9 @@ const { mode = 'auto' } = Astro.props;
     }
     return stops[stops.length - 1]![1];
   }
+
+  /** The scan that ships. The rest stay in the manifest for comparison. */
+  const DEFAULT_FRAME = '092-20';
 
   let CLOUD: Cloud | null = null;
 
@@ -338,14 +253,24 @@ const { mode = 'auto' } = Astro.props;
    */
   const REST: readonly number[] = [0, 0.5, 0, 1.2, 0, 0.9, 0];
   const GRAPE_R = 0.028;
-  /** Reachable points for a ~0.82 m arm, on the bench in front of the base. */
-  const SPOTS: readonly Vec3[] = [
-    [0.5, 0.16, GRAPE_R],
-    [0.42, -0.26, GRAPE_R],
-    [0.3, 0.34, GRAPE_R],
-    [0.54, -0.05, GRAPE_R],
+
+  /**
+   * Five stations the grape is relayed between, all inside the Rizon's reach.
+   *
+   * Each cycle moves it from one station to the next and ends with the gripper
+   * hovering over the destination — which is exactly where the following cycle
+   * begins. The grape is therefore always either sitting where it was last
+   * placed or held in the gripper, and never jumps.
+   */
+  const STATIONS: readonly Vec3[] = [
+    [0.52, 0.1, GRAPE_R],
+    [0.36, 0.4, GRAPE_R],
+    [0.02, 0.5, GRAPE_R],
+    [0.2, -0.44, GRAPE_R],
+    [0.5, -0.22, GRAPE_R],
   ];
-  const CYCLE = 7.6;
+  const HOVER = 0.17;
+  const CYCLE = 7.0;
 
   interface ArmState {
     target: Vec3;
@@ -355,35 +280,47 @@ const { mode = 'auto' } = Astro.props;
   }
 
   function armScene(t: number): ArmState {
-    const cycle = Math.floor(t / CYCLE);
+    const n = Math.floor(t / CYCLE);
     const u = (t % CYCLE) / CYCLE;
-    const spot = SPOTS[cycle % SPOTS.length] ?? SPOTS[0]!;
-    const drop: Vec3 = [0.16, -0.46, GRAPE_R];
-    const home: Vec3 = [0.34, 0.02, 0.46];
-    const above: Vec3 = [spot[0], spot[1], spot[2] + 0.17];
+
+    const from = STATIONS[n % STATIONS.length]!;
+    const to = STATIONS[(n + 1) % STATIONS.length]!;
+    const overFrom: Vec3 = [from[0], from[1], from[2] + HOVER];
+    const overTo: Vec3 = [to[0], to[1], to[2] + HOVER];
+
     const mix = (a: Vec3, b: Vec3, k: number): Vec3 => [
       lerp(a[0], b[0], k),
       lerp(a[1], b[1], k),
       lerp(a[2], b[2], k),
     ];
 
-    if (u < 0.26) return { target: mix(home, above, ease(u / 0.26)), grape: spot, grip: 0, holding: false };
-    if (u < 0.4)
-      return { target: mix(above, spot, ease((u - 0.26) / 0.14)), grape: spot, grip: 0, holding: false };
-    if (u < 0.48) return { target: spot, grape: spot, grip: ease((u - 0.4) / 0.08), holding: false };
-    if (u < 0.68) {
-      const lifted = mix(spot, above, ease((u - 0.48) / 0.2));
-      return { target: lifted, grape: lifted, grip: 1, holding: true };
+    // descend -> close -> lift -> carry -> descend -> open -> rise
+    if (u < 0.14) {
+      return { target: mix(overFrom, from, ease(u / 0.14)), grape: from, grip: 0, holding: false };
+    }
+    if (u < 0.22) {
+      return { target: from, grape: from, grip: ease((u - 0.14) / 0.08), holding: false };
+    }
+    if (u < 0.36) {
+      const p = mix(from, overFrom, ease((u - 0.22) / 0.14));
+      return { target: p, grape: p, grip: 1, holding: true };
+    }
+    if (u < 0.64) {
+      const p = mix(overFrom, overTo, ease((u - 0.36) / 0.28));
+      return { target: p, grape: p, grip: 1, holding: true };
+    }
+    if (u < 0.78) {
+      const p = mix(overTo, to, ease((u - 0.64) / 0.14));
+      return { target: p, grape: p, grip: 1, holding: true };
     }
     if (u < 0.86) {
-      const carried = mix(above, [drop[0], drop[1], drop[2] + 0.02], ease((u - 0.68) / 0.18));
-      return { target: carried, grape: carried, grip: 1, holding: true };
+      return { target: to, grape: to, grip: 1 - ease((u - 0.78) / 0.08), holding: false };
     }
-    const k = ease((u - 0.86) / 0.14);
+    // Rise clear, finishing over the destination — the next cycle's start.
     return {
-      target: mix([drop[0], drop[1], drop[2] + 0.02], home, k),
-      grape: drop,
-      grip: 1 - k,
+      target: mix(to, overTo, ease((u - 0.86) / 0.14)),
+      grape: to,
+      grip: 0,
       holding: false,
     };
   }
@@ -585,7 +522,6 @@ const { mode = 'auto' } = Astro.props;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
-    const root = canvas.closest('.scene');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     // ?scene=cars or ?scene=arm forces a scene, which makes it possible to
     // link to or screenshot a specific one. Otherwise it's a coin flip.
@@ -602,39 +538,19 @@ const { mode = 'auto' } = Astro.props;
     const mode: 'scan' | 'arm' = resolved ?? (Math.random() < 0.5 ? 'scan' : 'arm');
 
 
-    const stat = (slot: string, label: string, value: string): void => {
-      const dt = root?.querySelector<HTMLElement>(`[data-label="${slot}"]`);
-      const dd = root?.querySelector<HTMLElement>(`[data-stat="${slot}"]`);
-      if (dt) dt.textContent = label;
-      if (dd) dd.textContent = value;
-    };
-
-    if (mode === 'scan') {
-      stat('a', 'Scan', 'Pandar64');
-      stat('b', 'Points', 'loading…');
-      stat('c', 'Source', 'PandaSet');
-    } else {
-      stat('a', 'Model', MODEL_NAME);
-      stat('b', 'Tris', TRIANGLES.toLocaleString('en-GB'));
-      stat('c', 'Solver', 'CCD IK');
-    }
-
     if (mode === 'scan') {
       // Async: the grid draws immediately, points appear when they land.
-      // ?frame=<id> or ?frame=<n> picks one; otherwise it's random per visit.
       void (async () => {
         const frames = await loadManifest();
         if (frames.length === 0) return;
+        // One fixed scan ships. ?frame=<id> still overrides, so the others in
+        // the manifest can be compared without a rebuild.
         const want = new URLSearchParams(location.search).get('frame');
         const picked =
           frames.find((f) => f.id === want) ??
-          (want !== null && Number.isFinite(Number(want)) ? frames[Number(want) % frames.length] : undefined) ??
-          frames[Math.floor(Math.random() * frames.length)]!;
-
+          frames.find((f) => f.id === DEFAULT_FRAME) ??
+          frames[0]!;
         CLOUD = await loadFrame(picked.file);
-        stat('a', 'Scan', `Seq ${picked.sequence}`);
-        stat('b', 'Points', (CLOUD?.count ?? 0).toLocaleString('en-GB'));
-        stat('c', 'Source', CLOUD ? 'PandaSet' : 'unavailable');
       })();
     }
 
@@ -764,6 +680,11 @@ const { mode = 'auto' } = Astro.props;
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       t += dt;
+
+      // Idle orbit, paused while the user is driving it. The scan turns at
+      // roughly two minutes per revolution — enough to read as movement
+      // without becoming a carousel.
+      if (!dragging) az -= dt * (mode === 'arm' ? 0.07 : 0.052);
 
       render();
       raf = requestAnimationFrame(loop);
