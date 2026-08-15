@@ -49,9 +49,9 @@ function svg(slug) {
   // Muted, desaturated hues so the row of thumbnails reads as one family
   // rather than a bag of colours.
   const hue = seed % 360;
-  const base = `hsl(${hue} 32% 94%)`;
-  const mid = `hsl(${(hue + 18) % 360} 30% 86%)`;
-  const ink = `hsl(${hue} 34% 42%)`;
+  const base = `hsl(${hue} 34% 92%)`;
+  const mid = `hsl(${(hue + 22) % 360} 36% 78%)`;
+  const ink = `hsl(${hue} 46% 30%)`;
 
   const parts = [];
 
@@ -59,11 +59,11 @@ function svg(slug) {
   // anything specific.
   const cx = W * (0.28 + rand() * 0.44);
   const cy = H * (0.3 + rand() * 0.4);
-  const rings = 5 + Math.floor(rand() * 4);
+  const rings = 6 + Math.floor(rand() * 4);
   for (let i = 0; i < rings; i++) {
     const r = 60 + i * (60 + rand() * 45);
     parts.push(
-      `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="none" stroke="${ink}" stroke-width="${(1 + rand() * 1.4).toFixed(2)}" opacity="${(0.06 + rand() * 0.13).toFixed(3)}"/>`,
+      `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="none" stroke="${ink}" stroke-width="${(1 + rand() * 1.4).toFixed(2)}" opacity="${(0.16 + rand() * 0.2).toFixed(3)}"/>`,
     );
   }
 
@@ -74,15 +74,15 @@ function svg(slug) {
     const x1 = W * rand() * 0.5;
     const x2 = x1 + W * (0.3 + rand() * 0.45);
     parts.push(
-      `<line x1="${x1.toFixed(1)}" y1="${y.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${(y + (rand() - 0.5) * 90).toFixed(1)}" stroke="${ink}" stroke-width="1.25" opacity="${(0.1 + rand() * 0.14).toFixed(3)}"/>`,
+      `<line x1="${x1.toFixed(1)}" y1="${y.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${(y + (rand() - 0.5) * 90).toFixed(1)}" stroke="${ink}" stroke-width="${(1.2 + rand() * 1.6).toFixed(2)}" opacity="${(0.2 + rand() * 0.22).toFixed(3)}"/>`,
     );
   }
 
   // Nodes.
-  const dots = 5 + Math.floor(rand() * 6);
+  const dots = 8 + Math.floor(rand() * 8);
   for (let i = 0; i < dots; i++) {
     parts.push(
-      `<circle cx="${(W * rand()).toFixed(1)}" cy="${(H * rand()).toFixed(1)}" r="${(2.5 + rand() * 5).toFixed(1)}" fill="${ink}" opacity="${(0.14 + rand() * 0.2).toFixed(3)}"/>`,
+      `<circle cx="${(W * rand()).toFixed(1)}" cy="${(H * rand()).toFixed(1)}" r="${(2.5 + rand() * 5).toFixed(1)}" fill="${ink}" opacity="${(0.3 + rand() * 0.35).toFixed(3)}"/>`,
     );
   }
 

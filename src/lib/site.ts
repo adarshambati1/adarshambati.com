@@ -33,11 +33,32 @@ export async function getProfile(): Promise<Profile> {
   return profile;
 }
 
+/** Section display order, used to rank entries that cross sections. */
+const sectionRank = (key: SectionKey): number => SECTIONS.findIndex((s) => s.key === key);
+
 export async function getProjects(): Promise<Project[]> {
   const all = await getCollection('projects');
   return all
     .filter((p) => p.data.published)
     .sort((a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title));
+}
+
+/**
+ * The homepage selection, ranked across sections rather than within one.
+ *
+ * `order` is scoped to a section, so sorting featured entries by it alone lets a
+ * company tie with research and win on alphabetical tiebreak — which put Candor
+ * above Suturebot on a page about robotics.
+ */
+export async function getFeatured(limit = 3): Promise<Project[]> {
+  const all = await getProjects();
+  return all
+    .filter((p) => p.data.featured)
+    .sort(
+      (a, b) =>
+        sectionRank(a.data.section) - sectionRank(b.data.section) || a.data.order - b.data.order,
+    )
+    .slice(0, limit);
 }
 
 /** Newest first. */

@@ -11,7 +11,7 @@ import Prose from '../components/Prose.astro';
 import Footer from '../components/Footer.astro';
 import {
   getProfile,
-  getProjects,
+  getFeatured,
   getNotes,
   navActions,
   projectImage,
@@ -25,13 +25,10 @@ const { Content } = await render(profile);
 const { name, eyebrow, tagline, description, credentials, affiliations, portrait, emails, links } =
   profile.data;
 
-const projects = await getProjects();
-const notes = await getNotes();
-
 /* The homepage is a landing page, not an archive — a handful of each, with the
    full lists a click away. */
-const featured = projects.filter((p) => p.data.featured).slice(0, 3);
-const recentNotes = notes.slice(0, 3);
+const featured = await getFeatured(3);
+const recentNotes = (await getNotes()).slice(0, 3);
 ---
 
 <Base title={`${name} — ${tagline}`} description={description} navActions={navActions(profile)}>
