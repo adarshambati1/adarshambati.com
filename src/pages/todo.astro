@@ -25,8 +25,13 @@ const email: string | null = readSession(Astro.cookies.get(COOKIE)?.value);
     <a href="/">adarshambati.com</a>
     {
       email && (
-        <span>
-          {email} · <a href="/api/auth/logout">Sign out</a>
+        <span class="foot__account">
+          {email} ·{' '}
+          <form method="POST" action="/api/auth/logout">
+            <button type="submit" class="foot__signout">
+              Sign out
+            </button>
+          </form>
         </span>
       )
     }
@@ -97,6 +102,34 @@ const email: string | null = readSession(Astro.cookies.get(COOKIE)?.value);
     border-top: 1px solid var(--color-border);
     font-size: var(--text-xs);
     color: var(--color-text-subtle);
+  }
+
+  .foot__account {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-1);
+  }
+
+  .foot__account form {
+    display: inline;
+  }
+
+  /* A button because sign-out changes state and must be a POST, styled to sit
+     inline like the link it replaces. */
+  .foot__signout {
+    padding: 0;
+    font-size: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--color-border-strong);
+    text-underline-offset: 0.18em;
+  }
+
+  .foot__signout:hover {
+    color: var(--color-text);
   }
 
   /*
@@ -172,6 +205,20 @@ const email: string | null = readSession(Astro.cookies.get(COOKIE)?.value);
   const $title = document.getElementById('title') as HTMLInputElement;
   const $status = document.getElementById('status') as HTMLSpanElement;
 
+  /**
+   * Runs an async UI action and surfaces failures.
+   *
+   * Without this, a rejected IndexedDB write (private browsing, quota exceeded)
+   * becomes an unhandled rejection: the click appears to do nothing and there's
+   * no signal anywhere the user can see.
+   */
+  function act(fn: () => Promise<void>): void {
+    void fn().catch((error: unknown) => {
+      console.error(error);
+      $status.textContent = "couldn't save";
+    });
+  }
+
   function row(todo: Todo): HTMLLIElement {
     const li = document.createElement('li');
     if (todo.done) li.classList.add('is-done');
@@ -182,11 +229,11 @@ const email: string | null = readSession(Astro.cookies.get(COOKIE)?.value);
     check.checked = Boolean(todo.done);
     check.setAttribute('aria-label', todo.title);
     check.addEventListener('change', () => {
-      void (async () => {
+      act(async () => {
         await update(todo.id, { done: check.checked ? 1 : 0 });
         await render();
         void flush();
-      })();
+      });
     });
 
     const text = document.createElement('span');
@@ -199,11 +246,11 @@ const email: string | null = readSession(Astro.cookies.get(COOKIE)?.value);
     del.textContent = '×';
     del.setAttribute('aria-label', `Delete ${todo.title}`);
     del.addEventListener('click', () => {
-      void (async () => {
+      act(async () => {
         await remove(todo.id);
         await render();
         void flush();
-      })();
+      });
     });
 
     li.append(check, text, del);
@@ -233,11 +280,11 @@ const email: string | null = readSession(Astro.cookies.get(COOKIE)?.value);
     const title = $title.value.trim();
     if (!title) return;
     $title.value = '';
-    void (async () => {
+    act(async () => {
       await add(title);
       await render();
       void flush();
-    })();
+    });
   });
 
   // Foreground sync rather than background sync: iOS is unreliable about the

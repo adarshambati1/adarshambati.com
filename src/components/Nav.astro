@@ -91,13 +91,14 @@ const { name, links = DEFAULT_LINKS } = Astro.props;
     color: var(--color-text);
   }
 
-  /* The brand alone is enough on a narrow screen; the anchors are one scroll
-     away and the row would otherwise wrap into two lines. */
+  /* On a narrow screen drop Contact, not the work. Contact sits at the bottom
+     of a page people scroll anyway; the project sections are the reason to
+     navigate at all. */
   @media (max-width: 30rem) {
     .nav__list {
       gap: var(--space-4);
     }
-    .nav__list li:not(:last-child) {
+    .nav__list li:last-child {
       display: none;
     }
   }

@@ -46,6 +46,11 @@ has "state cookie httponly" "$OUT" "HttpOnly"
 chk "callback w/o state"    "$(curl -s -o /dev/null -w %{redirect_url} "$B/api/auth/callback?code=x&state=y")" "$B/login?error=state"
 chk "callback on cancel"    "$(curl -s -o /dev/null -w %{redirect_url} "$B/api/auth/callback?error=access_denied")" "$B/login?error=cancelled"
 chk "open redirect blocked" "$(curl -s -o /dev/null -D - "$B/api/auth/login?next=https://evil.example" | grep -c 'evil.example')" 0
+# Logout must not be reachable by navigation: as a GET it was one-click CSRF.
+chk "logout GET rejected"   "$(curl -s -o /dev/null -w %{http_code} $B/api/auth/logout)" 404
+chk "logout POST no Origin" "$(curl -s -o /dev/null -w %{http_code} -X POST $B/api/auth/logout)" 403
+chk "logout POST evil Org"  "$(curl -s -o /dev/null -w %{http_code} -X POST -H 'Origin: https://evil.example' $B/api/auth/logout)" 403
+chk "logout POST same Org"  "$(curl -s -o /dev/null -w %{http_code} -X POST -H "Origin: $B" $B/api/auth/logout)" 303
 
 echo "== sync: push then pull (bearer) =="
 T1=$(uuidgen); T2=$(uuidgen)

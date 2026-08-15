@@ -1,12 +1,24 @@
 import type { APIRoute } from 'astro';
-import { COOKIE } from '../../../lib/auth';
+import { COOKIE, sameOrigin } from '../../../lib/auth';
 
 export const prerender = false;
 
-const clear: APIRoute = async ({ cookies }) => {
-  cookies.delete(COOKIE, { path: '/' });
-  return new Response(null, { status: 302, headers: { location: '/login?error=out' } });
-};
+/**
+ * POST only, and same-origin only.
+ *
+ * As a GET this was a one-click CSRF: any third-party page could navigate you
+ * here and sign you out. /api/auth/* is deliberately outside the middleware's
+ * gate (it's how you get a session in the first place), so the origin check has
+ * to happen here rather than being inherited.
+ */
+export const POST: APIRoute = async ({ request, cookies, url }) => {
+  if (!sameOrigin(request, url.origin)) {
+    return new Response(JSON.stringify({ error: 'bad origin' }), {
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
 
-export const POST = clear;
-export const GET = clear;
+  cookies.delete(COOKIE, { path: '/' });
+  return new Response(null, { status: 303, headers: { location: '/login?error=out' } });
+};

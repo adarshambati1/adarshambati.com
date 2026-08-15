@@ -152,10 +152,28 @@ export function sync(): Promise<boolean> {
   return inFlight;
 }
 
+/**
+ * The server pages its response, so one round-trip isn't always enough. Keep
+ * pulling until it says we're caught up. Local changes only ride along on the
+ * first pass; later passes are pure reads.
+ *
+ * The bound is a safety net against a server that never clears `more` — without
+ * it a bug on either side becomes an infinite request loop in the browser.
+ */
 async function run(): Promise<boolean> {
+  let changed = false;
+  for (let pass = 0; pass < 50; pass++) {
+    const { changed: didChange, more } = await roundTrip(pass === 0);
+    changed = changed || didChange;
+    if (!more) break;
+  }
+  return changed;
+}
+
+async function roundTrip(includeLocalWrites: boolean): Promise<{ changed: boolean; more: boolean }> {
   const cursor = (await getMeta<number>('cursor')) ?? 0;
   const all = await getAll();
-  const dirty = all.filter((t) => t.dirty);
+  const dirty = includeLocalWrites ? all.filter((t) => t.dirty) : [];
 
   // Remember what we sent, so a concurrent edit during the request isn't
   // marked clean by this round-trip.
@@ -172,11 +190,11 @@ async function run(): Promise<boolean> {
 
   if (res.status === 401) {
     location.href = '/login?next=/todo';
-    return false;
+    return { changed: false, more: false };
   }
   if (!res.ok) throw new Error(`sync failed: ${res.status}`);
 
-  const body = (await res.json()) as { cursor: number; changes: Todo[] };
+  const body = (await res.json()) as { cursor: number; changes: Todo[]; more?: boolean };
   let changed = false;
 
   for (const incoming of body.changes) {
@@ -202,5 +220,5 @@ async function run(): Promise<boolean> {
   }
 
   await setMeta('cursor', body.cursor);
-  return changed;
+  return { changed, more: body.more === true };
 }

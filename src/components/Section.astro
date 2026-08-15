@@ -4,13 +4,16 @@ interface Props {
   id: string;
   title: string;
   /** Optional line under the heading. */
-  note?: string;
+  note?: string | undefined;
+  /** Quieter entrance for de-emphasised sections, so "Earlier" doesn't arrive
+   *  with the same weight as current work. */
+  quiet?: boolean;
 }
 
-const { id, title, note } = Astro.props;
+const { id, title, note, quiet = false } = Astro.props;
 ---
 
-<section class="section" id={id}>
+<section class:list={['section', { 'section--quiet': quiet }]} id={id}>
   <div class="section__head">
     <h2 class="section__title">{title}</h2>
     {note && <p class="section__note">{note}</p>}
@@ -23,13 +26,23 @@ const { id, title, note } = Astro.props;
     margin-top: var(--space-9);
   }
 
-  .section__head {
-    margin-bottom: var(--space-5);
+  .section--quiet {
+    margin-top: var(--space-8);
   }
 
+  .section__head {
+    margin-bottom: var(--space-4);
+  }
+
+  /* Full h2 size. At --text-xl it sat only 3px above card titles, which left
+     section headers and entry titles reading as the same level. */
   .section__title {
+    font-size: var(--text-2xl);
+  }
+
+  .section--quiet .section__title {
     font-size: var(--text-xl);
-    font-weight: var(--weight-semibold);
+    color: var(--color-text-muted);
   }
 
   .section__note {

@@ -51,7 +51,7 @@ function target(p: Project): { href: string | undefined; internal: boolean } {
       if (items.length === 0) return null;
       const compact = key === 'earlier';
       return (
-        <Section id={id} title={title} {...(note ? { note } : {})}>
+        <Section id={id} title={title} note={note} quiet={compact}>
           {items.map((p) => {
             const { href, internal } = target(p);
             return (

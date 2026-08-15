@@ -104,8 +104,11 @@ function safeParse(s: string): Todo['ts'] {
   }
 }
 
+/** Rows returned per pull. A client further behind than this pages through. */
+export const PAGE_LIMIT = 1000;
+
 /** Everything that changed after `cursor`, oldest first. */
-export async function changesSince(cursor: number, limit = 1000): Promise<Todo[]> {
+export async function changesSince(cursor: number, limit: number = PAGE_LIMIT): Promise<Todo[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT * FROM todos WHERE seq > ? ORDER BY seq ASC LIMIT ?`,
@@ -140,9 +143,11 @@ function merge(existing: Todo | undefined, incoming: TodoInput): { row: TodoInpu
     const exTs = base.ts?.[f] ?? 0;
     if (inTs < exTs) continue;
     // Keep the newer stamp even when the value is identical, so later merges
-    // still compare correctly.
+    // still compare correctly. This counts as a change in its own right — if we
+    // only persisted on a differing value, the advanced stamp would be dropped
+    // and a later write landing between the two timestamps could wrongly win.
+    if (inTs > exTs || base[f] !== incoming[f]) changed = true;
     ts[f] = inTs;
-    if (base[f] !== incoming[f]) changed = true;
   }
 
   const row: TodoInput = {
@@ -166,7 +171,7 @@ function merge(existing: Todo | undefined, incoming: TodoInput): { row: TodoInpu
 export async function push(
   incoming: TodoInput[],
   cursor: number,
-): Promise<{ cursor: number; changes: Todo[] }> {
+): Promise<{ cursor: number; changes: Todo[]; more: boolean }> {
   const c = await db();
 
   if (incoming.length > 0) {
@@ -213,7 +218,15 @@ export async function push(
     }
   }
 
-  return { cursor: await currentSeq(), changes: await changesSince(cursor) };
+  const changes = await changesSince(cursor, PAGE_LIMIT);
+  const truncated = changes.length === PAGE_LIMIT;
+
+  // Only advance the caller's cursor as far as we actually sent. Jumping it to
+  // the global latest would permanently skip every row past the page limit for
+  // a client that's a long way behind.
+  const nextCursor = truncated ? (changes[changes.length - 1]?.seq ?? cursor) : await currentSeq();
+
+  return { cursor: nextCursor, changes, more: truncated };
 }
 
 /** Create a single todo server-side. Used by the Shortcuts/Siri endpoint. */

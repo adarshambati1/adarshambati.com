@@ -23,16 +23,25 @@ const { name, tagline, portrait, current } = Astro.props;
 
   <div class="hero__body">
     <h1 class="hero__name">{name}</h1>
-    <p class="hero__tagline">{tagline}</p>
 
     {
+      /* Directly under the name, at full text colour. This is the credibility
+         line — as muted metadata below the tagline it read as an afterthought. */
       current && (
         <p class="hero__current">
           {current.role} at{' '}
-          {current.href ? <a href={current.href}>{current.org}</a> : <span>{current.org}</span>}
+          {current.href ? (
+            <a class="hero__org" href={current.href}>
+              {current.org}
+            </a>
+          ) : (
+            <span>{current.org}</span>
+          )}
         </p>
       )
     }
+
+    <p class="hero__tagline">{tagline}</p>
   </div>
 </section>
 
@@ -60,15 +69,20 @@ const { name, tagline, portrait, current } = Astro.props;
     font-size: var(--text-3xl);
   }
 
-  .hero__tagline {
-    margin-top: var(--space-1);
-    font-size: var(--text-lg);
-    color: var(--color-text-muted);
-    letter-spacing: var(--tracking-normal);
+  .hero__current {
+    margin-top: var(--space-2);
+    font-size: var(--text-base);
+    font-weight: var(--weight-medium);
+    color: var(--color-text);
   }
 
-  .hero__current {
-    margin-top: var(--space-3);
+  .hero__org {
+    color: var(--color-accent);
+    text-decoration-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  }
+
+  .hero__tagline {
+    margin-top: var(--space-1);
     font-size: var(--text-sm);
     color: var(--color-text-muted);
   }
