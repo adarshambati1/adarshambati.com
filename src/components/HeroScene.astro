@@ -6,8 +6,9 @@
  * Picks one of two scenes per visit, 50/50:
  *
  *   scan — a real PandaSet LiDAR frame, streamed as a quantised binary.
- *   arm  — a Flexiv Rizon 4s picking a grape, running forward kinematics with
- *          CCD inverse kinematics onto the target.
+ *   arm  — a Flexiv Rizon 4s relaying a grape between random stations, driven
+ *          by operational-space control with the redundancy resolved in the
+ *          nullspace.
  *
  * No overlay chrome: the scene is the whole thing. Drag to rotate, shift-drag
  * or shift-scroll to zoom, double-click to reset. Composed right-of-centre so
@@ -47,7 +48,7 @@ const { mode = 'auto' } = Astro.props;
 </style>
 
 <script>
-  import { forward as armFK, solveIK as armIK, MESHES } from '../lib/rizon';
+  import { forward as armFK, stepOSC, MESHES, HOME } from '../lib/rizon';
 
   type Vec3 = [number, number, number];
 
@@ -251,26 +252,32 @@ const { mode = 'auto' } = Astro.props;
    * Real Flexiv Rizon 4s: decimated visual meshes and the kinematic chain from
    * flexiv_description (Apache-2.0), via src/lib/rizon.ts.
    */
-  const REST: readonly number[] = [0, 0.5, 0, 1.2, 0, 0.9, 0];
+  const REST: readonly number[] = [...HOME];
   const GRAPE_R = 0.028;
+  const HOVER = 0.18;
+  const CYCLE = 6.4;
 
   /**
-   * Five stations the grape is relayed between, all inside the Rizon's reach.
+   * A pseudo-random but reproducible station for cycle n.
    *
-   * Each cycle moves it from one station to the next and ends with the gripper
-   * hovering over the destination — which is exactly where the following cycle
-   * begins. The grape is therefore always either sitting where it was last
-   * placed or held in the gripper, and never jumps.
+   * Reproducible matters: the safety test drives the same sequence, so a pose
+   * that passes there is the pose that ships. Placements stay inside a forward
+   * arc and an annulus the arm can reach comfortably — sampling the full circle
+   * would put grapes behind the base where joint 1 can't follow.
    */
-  const STATIONS: readonly Vec3[] = [
-    [0.52, 0.1, GRAPE_R],
-    [0.36, 0.4, GRAPE_R],
-    [0.02, 0.5, GRAPE_R],
-    [0.2, -0.44, GRAPE_R],
-    [0.5, -0.22, GRAPE_R],
-  ];
-  const HOVER = 0.17;
-  const CYCLE = 7.0;
+  function station(n: number): Vec3 {
+    let h = Math.imul(n + 1, 2654435761) >>> 0;
+    const rand = (): number => {
+      h ^= h << 13;
+      h ^= h >>> 17;
+      h ^= h << 5;
+      h >>>= 0;
+      return h / 4294967296;
+    };
+    const bearing = (rand() - 0.5) * 2.6;
+    const reach = 0.34 + rand() * 0.19;
+    return [Math.cos(bearing) * reach, Math.sin(bearing) * reach, GRAPE_R];
+  }
 
   interface ArmState {
     target: Vec3;
@@ -279,12 +286,18 @@ const { mode = 'auto' } = Astro.props;
     holding: boolean;
   }
 
+  /**
+   * One cycle carries the grape from where it was last set down to a fresh
+   * station, ending with the gripper hovering over the destination — which is
+   * where the next cycle begins. The grape is therefore always either resting
+   * where it was placed or held in the gripper; it never teleports.
+   */
   function armScene(t: number): ArmState {
     const n = Math.floor(t / CYCLE);
     const u = (t % CYCLE) / CYCLE;
 
-    const from = STATIONS[n % STATIONS.length]!;
-    const to = STATIONS[(n + 1) % STATIONS.length]!;
+    const from = station(n);
+    const to = station(n + 1);
     const overFrom: Vec3 = [from[0], from[1], from[2] + HOVER];
     const overTo: Vec3 = [to[0], to[1], to[2] + HOVER];
 
@@ -294,7 +307,6 @@ const { mode = 'auto' } = Astro.props;
       lerp(a[2], b[2], k),
     ];
 
-    // descend -> close -> lift -> carry -> descend -> open -> rise
     if (u < 0.14) {
       return { target: mix(overFrom, from, ease(u / 0.14)), grape: from, grip: 0, holding: false };
     }
@@ -316,7 +328,6 @@ const { mode = 'auto' } = Astro.props;
     if (u < 0.86) {
       return { target: to, grape: to, grip: 1 - ease((u - 0.78) / 0.08), holding: false };
     }
-    // Rise clear, finishing over the destination — the next cycle's start.
     return {
       target: mix(to, overTo, ease((u - 0.86) / 0.14)),
       grape: to,
@@ -563,6 +574,12 @@ const { mode = 'auto' } = Astro.props;
     let w = 0;
     let h = 0;
     const angles: number[] = [...REST];
+    // Settle onto the first target before the first frame. Otherwise the arm
+    // opens with a long swoop down from the home pose and spends the first
+    // cycle catching up to a target that's already moving.
+    if (mode === 'arm') {
+      for (let i = 0; i < 600; i++) stepOSC(angles, armScene(0).target, 1 / 60);
+    }
 
     function resize(): void {
       const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -596,7 +613,8 @@ const { mode = 'auto' } = Astro.props;
           };
     }
 
-    function render(): void {
+    /** `dt` drives the OSC integration; the default suits one-off redraws. */
+    function render(dt: number = 1 / 60): void {
       if (!ctx) return;
       ctx.fillStyle = '#080a10';
       ctx.fillRect(0, 0, w, h);
@@ -604,8 +622,9 @@ const { mode = 'auto' } = Astro.props;
       if (mode === 'scan') {
         drawCloud(ctx, w, h, cam);
       } else {
-        armIK(angles, armScene(t).target, reduced ? 40 : 3);
-        drawArm(ctx, cam, angles, armScene(t));
+        const state = armScene(t);
+        stepOSC(angles, state.target, dt);
+        drawArm(ctx, cam, angles, state);
       }
     }
 
@@ -670,7 +689,9 @@ const { mode = 'auto' } = Astro.props;
     }).observe(canvas);
 
     if (reduced) {
-      t = CYCLE * 0.42;
+      t = CYCLE * 0.5;
+      // Converge to the pose before drawing it once.
+      for (let i = 0; i < 400; i++) stepOSC(angles, armScene(t).target, 1 / 60);
       render();
       return;
     }
@@ -686,7 +707,7 @@ const { mode = 'auto' } = Astro.props;
       // without becoming a carousel.
       if (!dragging) az -= dt * (mode === 'arm' ? 0.07 : 0.052);
 
-      render();
+      render(dt);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);

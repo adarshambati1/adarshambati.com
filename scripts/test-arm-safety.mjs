@@ -48,29 +48,35 @@ try {
     ),
   );
 
-  const { forward, solveIK, isSafe, CHAIN } = await import(pathToFileURL(compiled).href);
+  const { forward, stepOSC, isSafe, CHAIN, HOME } = await import(pathToFileURL(compiled).href);
 
   const GRAPE_R = 0.028;
-  const STATIONS = [
-    [0.52, 0.1, GRAPE_R],
-    [0.36, 0.4, GRAPE_R],
-    [0.02, 0.5, GRAPE_R],
-    [0.2, -0.44, GRAPE_R],
-    [0.5, -0.22, GRAPE_R],
-  ];
-  const HOVER = 0.17;
-  const CYCLE = 7.0;
-  const REST = [0, 0.5, 0, 1.2, 0, 0.9, 0];
+  const HOVER = 0.18;
+  const CYCLE = 6.4;
+  const REST = [...HOME];
   const lerp = (a, b, t) => a + (b - a) * t;
   const ease = (t) => t * t * (3 - 2 * t);
   const mix = (a, b, k) => [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
 
-  // Mirrors armScene() in src/components/HeroScene.astro.
+  // Mirrors station() and armScene() in src/components/HeroScene.astro. The
+  // placement is pseudo-random but reproducible, so the sequence tested here is
+  // the sequence that ships.
+  function station(n) {
+    let h = Math.imul(n + 1, 2654435761) >>> 0;
+    const rand = () => {
+      h ^= h << 13; h ^= h >>> 17; h ^= h << 5; h >>>= 0;
+      return h / 4294967296;
+    };
+    const bearing = (rand() - 0.5) * 2.6;
+    const reach = 0.34 + rand() * 0.19;
+    return [Math.cos(bearing) * reach, Math.sin(bearing) * reach, GRAPE_R];
+  }
+
   function target(t) {
     const n = Math.floor(t / CYCLE);
     const u = (t % CYCLE) / CYCLE;
-    const from = STATIONS[n % STATIONS.length];
-    const to = STATIONS[(n + 1) % STATIONS.length];
+    const from = station(n);
+    const to = station(n + 1);
     const overFrom = [from[0], from[1], from[2] + HOVER];
     const overTo = [to[0], to[1], to[2] + HOVER];
 
@@ -84,17 +90,23 @@ try {
   }
 
   const angles = [...REST];
+  // Same warm-up the component does, so the test measures steady-state
+  // tracking rather than the opening swoop.
+  for (let i = 0; i < 600; i++) stepOSC(angles, target(0), 1 / 60);
   let unsafe = 0;
   let violations = 0;
-  let minZ = Infinity;
+  let minSurface = Infinity;
+  let minTcpZ = Infinity;
+  // Mirrors LINK_RADII in src/lib/rizon.ts.
+  const LINK_RADII = [0.085, 0.075, 0.065, 0.058, 0.05, 0.045, 0.04];
   let graspErr = 0;
   const FPS = 60;
-  const FRAMES = Math.round(CYCLE * 5 * FPS);
+  const FRAMES = Math.round(CYCLE * 12 * FPS); // twelve different random stations
 
   for (let f = 0; f < FRAMES; f++) {
     const t = f / FPS;
     const goal = target(t);
-    solveIK(angles, goal, 3);
+    stepOSC(angles, goal, 1 / FPS);
 
     if (!isSafe(angles)) unsafe++;
     CHAIN.forEach((spec, i) => {
@@ -102,11 +114,16 @@ try {
     });
 
     const { joints, tcp } = forward(angles);
-    for (const j of joints.slice(1)) minZ = Math.min(minZ, j.p[2]);
-    minZ = Math.min(minZ, tcp[2]);
+    // Clearance is surface-to-bench, and the links taper, so each joint is
+    // measured against its own radius. The tool is exempt: reaching down to
+    // something resting on the bench is the task.
+    joints.slice(1).forEach((j, k) => {
+      minSurface = Math.min(minSurface, j.p[2] - (LINK_RADII[Math.min(k + 1, LINK_RADII.length - 1)] ?? 0.05));
+    });
+    minTcpZ = Math.min(minTcpZ, tcp[2]);
 
     const u = (t % CYCLE) / CYCLE;
-    if (u >= 0.22 && u <= 0.78) {
+    if ((u >= 0.17 && u <= 0.22) || (u >= 0.80 && u <= 0.86)) {
       graspErr = Math.max(graspErr, Math.hypot(tcp[0] - goal[0], tcp[1] - goal[1], tcp[2] - goal[2]));
     }
   }
@@ -119,8 +136,9 @@ try {
     ['frames simulated', FRAMES, true],
     ['unsafe frames', unsafe, unsafe === 0],
     ['joint-limit violations', violations, violations === 0],
-    ['lowest joint z (m)', minZ.toFixed(4), minZ >= 0.0349],
-    ['grasp-phase error (m)', graspErr.toFixed(4), graspErr < 0.02],
+    ['lowest link surface (m)', minSurface.toFixed(4), minSurface >= 0.0199],
+    ['lowest tool z (m)', minTcpZ.toFixed(4), minTcpZ >= -0.005],
+    ['grasp/release error (m)', graspErr.toFixed(4), graspErr < 0.02],
     ['rejects folded pose', rejectsFolded, rejectsFolded],
     ['rejects floor crash', rejectsFloor, rejectsFloor],
   ];

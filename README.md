@@ -226,7 +226,7 @@ The hero picks a scene per visit. Pin one with a query parameter:
 | URL | Scene |
 | --- | --- |
 | `/?scene=scan` | A real PandaSet LiDAR frame |
-| `/?scene=arm` | Flexiv Rizon 4s picking a grape, FK + CCD IK |
+| `/?scene=arm` | Flexiv Rizon 4s relaying a grape, FK + operational-space control |
 
 Without the parameter it picks one at random per visit. `?frame=092-20` pins a
 specific scan; the ids are in `public/data/lidar-frames.json`.
@@ -236,10 +236,16 @@ reset. Plain scrolling is left alone deliberately — hijacking the wheel on a
 full-viewport hero traps the reader. Both scenes hold still under
 `prefers-reduced-motion`.
 
-`npm run test:arm` drives the arm through four full pick cycles and asserts it
-never self-collides, never drops a link below the bench, and never leaves a
-joint limit — plus that the guard rejects two deliberately bad poses, so a pass
-can't be vacuous.
+`npm run test:arm` drives the arm through twelve randomly placed pick-and-place
+cycles and asserts it never self-collides, never drops a link surface below the
+bench, and never leaves a joint limit — plus that the guard rejects two
+deliberately bad poses, so a pass can't be vacuous.
+
+The solver is operational-space control: a damped least-squares pseudo-inverse
+of the position Jacobian moves the tool, and the 7-DOF arm's redundancy is
+resolved in the nullspace to keep the elbow tidy and the joints off their stops.
+That nullspace term is what separates this from CCD, which is greedy and takes
+whichever joint angles reach the target first — hence the contorted poses.
 
 ## Known gaps
 

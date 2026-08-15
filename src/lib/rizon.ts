@@ -87,11 +87,26 @@ export interface JointSpec {
   limit: [number, number];
 }
 
+/**
+ * How much of each joint's real range to actually use.
+ *
+ * The URDF limits are what the hardware allows, not what looks composed. Near
+ * the extremes the arm folds back on itself and the wrist flips, so the usable
+ * range is pulled in around each joint's midpoint.
+ */
+const LIMIT_MARGIN = 0.62;
+
+function tighten([lo, hi]: [number, number]): [number, number] {
+  const mid = (lo + hi) / 2;
+  const half = ((hi - lo) / 2) * LIMIT_MARGIN;
+  return [mid - half, mid + half];
+}
+
 export const CHAIN: JointSpec[] = model.chain.map((j) => ({
   xyz: j.xyz as Vec3,
   rot: rpy(j.rpy[0] ?? 0, j.rpy[1] ?? 0, j.rpy[2] ?? 0),
   axis: j.axis === 'y' ? 'y' : 'z',
-  limit: j.limit as [number, number],
+  limit: tighten(j.limit as [number, number]),
 }));
 
 export const FLANGE = {
@@ -158,10 +173,24 @@ const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.m
 
 /* -------------------------------------------------------------- safety -- */
 
-/** Nothing may descend below this, so the arm never drives into the bench. */
-const FLOOR_CLEARANCE = 0.035;
-/** Link radius plus margin. Non-adjacent links must stay this far apart. */
-const SELF_CLEARANCE = 0.11;
+/**
+ * Per-link radius, shoulder to wrist.
+ *
+ * Clearance has to be measured against the link surface, not the centreline —
+ * testing joint origins alone is what let the arm sit visibly on the bench
+ * while every check passed. The taper matters too: a Rizon's shoulder is roughly
+ * twice the girth of its wrist, and treating them alike makes the wrist links
+ * appear to collide with each other in perfectly ordinary poses.
+ */
+const LINK_RADII: readonly number[] = [0.085, 0.075, 0.065, 0.058, 0.05, 0.045, 0.04];
+
+const radiusOf = (segment: number): number =>
+  LINK_RADII[Math.min(segment, LINK_RADII.length - 1)] ?? 0.05;
+
+/** Structural links stay clear of the bench by this much, surface to surface. */
+const FLOOR_CLEARANCE = 0.02;
+/** Non-adjacent links keep this much air between their surfaces. */
+const SELF_CLEARANCE = 0.03;
 
 /** Shortest distance between two line segments. */
 function segmentDistance(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3): number {
@@ -206,19 +235,21 @@ function segmentDistance(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3): number {
 /**
  * Is this configuration safe to hold?
  *
- * Joint limits are already enforced by clamping, but staying inside them says
- * nothing about whether the arm has folded through itself or pushed a link into
- * the bench — both of which a real robot would refuse. Links are approximated
- * as segments between consecutive joint origins; adjacent pairs are skipped
- * because they share an endpoint by construction.
+ * Links are capsules of LINK_RADIUS around the segment between consecutive
+ * joint origins. The final segment — the wrist and gripper — is exempt from the
+ * floor rule, because reaching down to something resting on the bench is the
+ * whole task; everything structural above it is not.
  */
 export function isSafe(angles: readonly number[]): boolean {
   const { joints, tcp } = forward(angles);
   const points: Vec3[] = [...joints.map((j) => j.p), tcp];
 
-  for (let i = 1; i < points.length; i++) {
-    if ((points[i]?.[2] ?? 0) < FLOOR_CLEARANCE) return false;
+  // Every joint but the last must keep its surface off the bench.
+  for (let i = 1; i < points.length - 1; i++) {
+    if ((points[i]?.[2] ?? 0) - radiusOf(i) < FLOOR_CLEARANCE) return false;
   }
+  // The tool may come down to the work, but not through it.
+  if ((tcp[2] ?? 0) < -0.005) return false;
 
   for (let i = 0; i < points.length - 1; i++) {
     for (let k = i + 2; k < points.length - 1; k++) {
@@ -227,57 +258,173 @@ export function isSafe(angles: readonly number[]): boolean {
       const b0 = points[k];
       const b1 = points[k + 1];
       if (!a0 || !a1 || !b0 || !b1) continue;
-      if (segmentDistance(a0, a1, b0, b1) < SELF_CLEARANCE) return false;
+      const gap = segmentDistance(a0, a1, b0, b1) - radiusOf(i) - radiusOf(k);
+      if (gap < SELF_CLEARANCE) return false;
     }
   }
   return true;
 }
 
+/* ------------------------------------------------------- operational space -- */
+
 /**
- * Cyclic coordinate descent onto `target`, respecting the real joint limits
- * and refusing to settle in an unsafe pose.
+ * Position Jacobian, 3 x 7.
  *
- * Each joint rotates about its own axis by the angle that best brings the tool
- * centre toward the target; steps are capped so the arm settles rather than
- * snapping. After every pass the configuration is checked for self-collision
- * and floor penetration, and reverted if it fails — so the arm stalls short of
- * an unreachable target rather than contorting to hit it.
+ * For a revolute joint, moving it sweeps the tool around that joint's axis, so
+ * the column is simply axis x (tcp - jointOrigin).
  */
-export function solveIK(angles: number[], target: Vec3, iterations: number): void {
-  for (let pass = 0; pass < iterations; pass++) {
-    const before = angles.slice();
+function jacobian(pose: Pose): number[][] {
+  const J: number[][] = [[], [], []];
+  for (let i = 0; i < CHAIN.length; i++) {
+    const j = pose.joints[i];
+    if (!j) continue;
+    const r = sub(pose.tcp, j.p);
+    const c = cross(j.axis, r);
+    J[0]!.push(c[0]);
+    J[1]!.push(c[1]);
+    J[2]!.push(c[2]);
+  }
+  return J;
+}
 
-    for (let i = CHAIN.length - 1; i >= 0; i--) {
-      const { joints, tcp } = forward(angles);
-      const j = joints[i];
-      const spec = CHAIN[i];
-      if (!j || !spec) continue;
+/** Inverse of a symmetric 3x3, by cofactors. Returns null if near-singular. */
+function invert3(m: number[][]): number[][] | null {
+  const [a, b, c] = [m[0]![0]!, m[0]![1]!, m[0]![2]!];
+  const [d, e, f] = [m[1]![0]!, m[1]![1]!, m[1]![2]!];
+  const [g, h, i] = [m[2]![0]!, m[2]![1]!, m[2]![2]!];
 
-      const axis = j.axis;
-      const flat = (v: Vec3): Vec3 => {
-        const k = dot(v, axis);
-        return [v[0] - axis[0] * k, v[1] - axis[1] * k, v[2] - axis[2] * k];
-      };
-      const a = normalise(flat(sub(tcp, j.p)));
-      const b = normalise(flat(sub(target, j.p)));
-      if (Math.hypot(a[0], a[1], a[2]) < 1e-6 || Math.hypot(b[0], b[1], b[2]) < 1e-6) continue;
+  const A = e * i - f * h;
+  const B = -(d * i - f * g);
+  const C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (Math.abs(det) < 1e-12) return null;
 
-      const signed = Math.atan2(dot(cross(a, b), axis), clamp(dot(a, b), -1, 1));
-      const proposed = clamp(
-        (angles[i] ?? 0) + clamp(signed, -0.25, 0.25),
-        spec.limit[0],
-        spec.limit[1],
-      );
+  const inv = 1 / det;
+  return [
+    [A * inv, -(b * i - c * h) * inv, (b * f - c * e) * inv],
+    [B * inv, (a * i - c * g) * inv, -(a * f - c * d) * inv],
+    [C * inv, -(a * h - b * g) * inv, (a * e - b * d) * inv],
+  ];
+}
 
-      // Try the move; keep it only if the arm is still in a safe pose.
-      const previous = angles[i] ?? 0;
-      angles[i] = proposed;
-      if (!isSafe(angles)) angles[i] = previous;
+/**
+ * Damping for the pseudo-inverse. Bounds joint speed near singularities, but
+ * it's deliberately small: damping also stops (I - J+J) being a clean
+ * projector, which lets the posture task bleed into the tool's motion. At 0.06
+ * that leak cost 0.5 m of tracking error.
+ */
+const DAMPING = 0.01;
+/** Task-space gain: how hard the tool is pulled toward the target. */
+const TASK_GAIN = 12;
+/** Ceiling on commanded tool speed, m/s. */
+const MAX_TOOL_SPEED = 2.5;
+/**
+ * Nullspace gain. Low on purpose — this only has to keep the elbow tidy and
+ * the joints off their stops, and turning it up fights the task rather than
+ * complementing it.
+ */
+const POSTURE_GAIN = 0.15;
+/** Ceiling on any single joint's rate, rad/s. */
+const MAX_JOINT_RATE = 5;
+
+/** The posture the nullspace drifts toward — elbow up, wrist clear. */
+export const HOME: readonly number[] = [0, 0.42, 0, 1.15, 0, 0.86, 0];
+
+/**
+ * Operational-space control step.
+ *
+ * Solves for joint rates that move the tool toward `target`, using a damped
+ * least-squares pseudo-inverse so the arm stays well behaved near
+ * singularities. The redundancy of a 7-DOF arm is resolved in the nullspace:
+ * whatever joint motion doesn't affect the tool is used to pull the arm back
+ * toward a comfortable posture and away from its limits.
+ *
+ * That nullspace term is the difference between this and CCD. CCD is greedy —
+ * it takes whatever joint angles reach the target first, which is why it
+ * produces contorted poses. Here the arm reaches the same point in the pose a
+ * person would pick.
+ *
+ * Any step that would end in an unsafe configuration is rejected, so the tool
+ * stalls short rather than driving a link through the bench.
+ */
+export function stepOSC(angles: number[], target: Vec3, dt: number): void {
+  const step = clamp(dt, 0, 0.05);
+  const pose = forward(angles);
+
+  // Task: velocity toward the target, capped.
+  const err = sub(target, pose.tcp);
+  const dist = Math.hypot(err[0], err[1], err[2]);
+  if (dist < 1e-5) return;
+  const speed = Math.min(TASK_GAIN * dist, MAX_TOOL_SPEED);
+  const v: Vec3 = [(err[0] / dist) * speed, (err[1] / dist) * speed, (err[2] / dist) * speed];
+
+  const J = jacobian(pose);
+  const n = CHAIN.length;
+
+  // JJ^T + lambda^2 I, a 3x3.
+  const JJt: number[][] = [[], [], []];
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      let sum = 0;
+      for (let k = 0; k < n; k++) sum += (J[r]![k] ?? 0) * (J[c]![k] ?? 0);
+      JJt[r]![c] = sum + (r === c ? DAMPING * DAMPING : 0);
     }
+  }
+  const inv = invert3(JJt);
+  if (!inv) return;
 
-    // Belt and braces: if a pass somehow ended unsafe, roll the whole pass back.
-    if (!isSafe(angles)) {
-      for (let i = 0; i < angles.length; i++) angles[i] = before[i] ?? 0;
+  // qdot_task = J^T (JJ^T + l^2 I)^-1 v
+  const w: Vec3 = [
+    (inv[0]![0] ?? 0) * v[0] + (inv[0]![1] ?? 0) * v[1] + (inv[0]![2] ?? 0) * v[2],
+    (inv[1]![0] ?? 0) * v[0] + (inv[1]![1] ?? 0) * v[1] + (inv[1]![2] ?? 0) * v[2],
+    (inv[2]![0] ?? 0) * v[0] + (inv[2]![1] ?? 0) * v[1] + (inv[2]![2] ?? 0) * v[2],
+  ];
+  const qTask: number[] = [];
+  for (let k = 0; k < n; k++) {
+    qTask.push((J[0]![k] ?? 0) * w[0] + (J[1]![k] ?? 0) * w[1] + (J[2]![k] ?? 0) * w[2]);
+  }
+
+  // Posture task, projected into the nullspace: qdot += (I - J^+ J) qdot_null.
+  const qNull: number[] = [];
+  for (let k = 0; k < n; k++) {
+    const spec = CHAIN[k]!;
+    const mid = (spec.limit[0] + spec.limit[1]) / 2;
+    // Blend "return to home" with "flee the nearest limit".
+    const toHome = (HOME[k] ?? 0) - (angles[k] ?? 0);
+    const toCentre = mid - (angles[k] ?? 0);
+    qNull.push(POSTURE_GAIN * (0.7 * toHome + 0.3 * toCentre));
+  }
+
+  // J^+ J qdot_null, via the same damped inverse.
+  const Jq: Vec3 = [0, 0, 0];
+  for (let r = 0; r < 3; r++) {
+    let sum = 0;
+    for (let k = 0; k < n; k++) sum += (J[r]![k] ?? 0) * (qNull[k] ?? 0);
+    Jq[r] = sum;
+  }
+  const u: Vec3 = [
+    (inv[0]![0] ?? 0) * Jq[0] + (inv[0]![1] ?? 0) * Jq[1] + (inv[0]![2] ?? 0) * Jq[2],
+    (inv[1]![0] ?? 0) * Jq[0] + (inv[1]![1] ?? 0) * Jq[1] + (inv[1]![2] ?? 0) * Jq[2],
+    (inv[2]![0] ?? 0) * Jq[0] + (inv[2]![1] ?? 0) * Jq[1] + (inv[2]![2] ?? 0) * Jq[2],
+  ];
+
+  const proposed = angles.slice();
+  for (let k = 0; k < n; k++) {
+    const projected =
+      (qNull[k] ?? 0) -
+      ((J[0]![k] ?? 0) * u[0] + (J[1]![k] ?? 0) * u[1] + (J[2]![k] ?? 0) * u[2]);
+    const rate = clamp((qTask[k] ?? 0) + projected, -MAX_JOINT_RATE, MAX_JOINT_RATE);
+    const spec = CHAIN[k]!;
+    proposed[k] = clamp((angles[k] ?? 0) + rate * step, spec.limit[0], spec.limit[1]);
+  }
+
+  // Reject the whole step if it lands somewhere the arm shouldn't be. Halving
+  // it a few times finds the largest safe move along the same direction.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const scale = 1 / 2 ** attempt;
+    const candidate = angles.map((a, k) => a + ((proposed[k] ?? a) - a) * scale);
+    if (isSafe(candidate)) {
+      for (let k = 0; k < n; k++) angles[k] = candidate[k] ?? angles[k]!;
       return;
     }
   }
