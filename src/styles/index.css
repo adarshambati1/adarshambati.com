@@ -7,7 +7,7 @@
    instead.
    ========================================================================== */
 
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/hanken-grotesk';
 
 :root {
   /* ---------- colour ----------------------------------------------------- */
@@ -35,7 +35,7 @@
 
   /* ---------- type ------------------------------------------------------- */
 
-  --font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Hanken Grotesk Variable', 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
   --text-xs: 0.8125rem;
@@ -54,8 +54,8 @@
   --leading-snug: 1.4;
   --leading-normal: 1.65;
 
-  --tracking-tight: -0.021em;
-  --tracking-normal: -0.011em;
+  --tracking-tight: -0.016em;
+  --tracking-normal: -0.006em;
   --tracking-wide: 0.08em;
 
   /* ---------- space ------------------------------------------------------ */
@@ -79,7 +79,7 @@
   /* ---------- layout ----------------------------------------------------- */
 
   --width-content: 42rem;
-  /* ~68 characters in Inter at 16px — the top of the comfortable range. */
+  /* ~68 characters in Hanken Grotesk at 16px — top of the comfortable range. */
   --width-prose: 34rem;
   --header-height: 3.75rem;
 
