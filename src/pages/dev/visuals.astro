@@ -1,0 +1,88 @@
+---
+import HeroVisual from '../../components/HeroVisual.astro';
+
+/**
+ * Dev-only preview. Not linked from anywhere.
+ *
+ * The top row freezes the arm at points across the pick cycle so a pose can be
+ * checked without waiting for the animation to come round.
+ */
+// Server-rendered so it can 404 in production — this is a workbench, not a page
+// anyone should be able to reach on the live site.
+export const prerender = false;
+
+if (import.meta.env.PROD) {
+  return new Response(null, { status: 404 });
+}
+
+const PHASES: readonly { phase: number; label: string }[] = [
+  { phase: 0.15, label: 'travel' },
+  { phase: 0.33, label: 'descend' },
+  { phase: 0.45, label: 'grasp' },
+  { phase: 0.6, label: 'lift' },
+  { phase: 0.78, label: 'carry' },
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hero visuals — preview</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <style is:global>
+      body {
+        margin: 0;
+        padding: 2.5rem;
+        background: #fff;
+        font: 14px system-ui, sans-serif;
+        color: #444;
+      }
+      h2 {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #888;
+        margin: 2.5rem 0 1rem;
+      }
+      .row {
+        display: flex;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+      }
+      figure {
+        margin: 0;
+        text-align: center;
+      }
+      figcaption {
+        margin-top: 0.6rem;
+        font-size: 0.8rem;
+        color: #777;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Pick cycle — frozen phases</h2>
+    <div class="row" style="display:flex;gap:1.25rem;flex-wrap:wrap;align-items:flex-start">
+      {
+        PHASES.map(({ phase, label }) => (
+          <figure style="margin:0;text-align:center">
+            <HeroVisual size={210} mode="arm" phase={phase} />
+            <figcaption>{label}</figcaption>
+          </figure>
+        ))
+      }
+    </div>
+
+    <h2>Live, as the hero renders them</h2>
+    <div class="row" style="display:flex;gap:1.25rem;flex-wrap:wrap;align-items:flex-start">
+      <figure style="margin:0;text-align:center">
+        <HeroVisual size={340} mode="arm" />
+        <figcaption>arm</figcaption>
+      </figure>
+      <figure style="margin:0;text-align:center">
+        <HeroVisual size={340} mode="lidar" />
+        <figcaption>lidar</figcaption>
+      </figure>
+    </div>
+  </body>
+</html>

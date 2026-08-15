@@ -14,15 +14,21 @@
  */
 interface Props {
   size?: number;
+  /** 'auto' picks 50/50 per visit. Pin it to inspect one scene. */
+  mode?: 'auto' | 'arm' | 'lidar';
+  /** 0–1: freeze at this point in the pick cycle. For previewing poses. */
+  phase?: number | undefined;
 }
 
-const { size = 260 } = Astro.props;
+const { size = 260, mode = 'auto', phase } = Astro.props;
 ---
 
 <div class="visual" style={`--visual-size:${size}px`}>
   <canvas
     class="visual__canvas"
     data-hero-visual
+    data-mode={mode}
+    data-phase={phase === undefined ? undefined : String(phase)}
     width={size}
     height={size}
     role="img"
@@ -502,7 +508,10 @@ const { size = 260 } = Astro.props;
     }
 
     items.push({
-      depth: grapeScreen.depth,
+      // While held, the grape and the gripper occupy the same point, so their
+      // sort order is a coin flip and the grape disappears behind the fingers.
+      // Bias it toward the camera so a held grape always reads as held.
+      depth: grapeScreen.depth - (state.holding ? 0.05 : 0),
       paint: () => drawGrape(ctx, grapeScreen, Math.max(2.5, GRAPE_R * zoom * grapeScreen.scale)),
     });
 
@@ -629,7 +638,13 @@ const { size = 260 } = Astro.props;
     if (!ctx) return;
 
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const mode: 'arm' | 'lidar' = Math.random() < 0.5 ? 'arm' : 'lidar';
+    const requested = canvas.dataset.mode;
+    const mode: 'arm' | 'lidar' =
+      requested === 'arm' || requested === 'lidar'
+        ? requested
+        : Math.random() < 0.5
+          ? 'arm'
+          : 'lidar';
     canvas.setAttribute(
       'aria-label',
       mode === 'arm'
@@ -703,6 +718,17 @@ const { size = 260 } = Astro.props;
       },
       { passive: true },
     );
+
+    // A pinned phase freezes the scene at one point in the pick cycle, for
+    // previewing poses. Solve to convergence first so the pose is the settled
+    // one rather than wherever three iterations happened to land.
+    const pinned = canvas.dataset.phase;
+    if (pinned !== undefined && pinned !== '') {
+      t = CYCLE * Number(pinned);
+      if (mode === 'arm') solveIK(angles, scene(t).target, 60);
+      render();
+      return;
+    }
 
     if (reduced) {
       t = CYCLE * 0.42; // mid-grasp, held still
