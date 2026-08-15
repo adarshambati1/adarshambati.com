@@ -1,0 +1,87 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import type { GetStaticPaths } from 'astro';
+import Base from '../../layouts/Base.astro';
+import Prose from '../../components/Prose.astro';
+import Footer from '../../components/Footer.astro';
+
+export const prerender = true;
+
+/**
+ * A page per project — but only for projects that have something to say.
+ *
+ * Entries whose Markdown body is empty don't get a page; the homepage links
+ * them straight to GitHub instead. That keeps the site from filling up with
+ * stub pages that repeat the one-line summary and nothing else.
+ */
+export const getStaticPaths: GetStaticPaths = async () => {
+  const projects = await getCollection('projects');
+  return projects
+    .filter((p) => p.data.published && p.body?.trim())
+    .map((p) => ({ params: { slug: p.id }, props: { entry: p } }));
+};
+
+interface Props {
+  entry: CollectionEntry<'projects'>;
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const { title, period, summary, href } = entry.data;
+
+const sourceLabel: string | null = href ? new URL(href).hostname.replace(/^www\./, '') : null;
+---
+
+<Base title={`${title} — Adarsh Ambati`} description={summary}>
+  <article>
+    <header class="head">
+      <p class="head__back"><a href="/">&larr; Back</a></p>
+      <h1>{title}</h1>
+      <p class="head__period u-subtle u-mono-nums">{period}</p>
+      <p class="head__summary">{summary}</p>
+    </header>
+
+    <Prose><Content /></Prose>
+
+    {
+      href && sourceLabel && (
+        <p class="source">
+          <a href={href} rel="noopener">
+            {sourceLabel} &rarr;
+          </a>
+        </p>
+      )
+    }
+  </article>
+
+  <Footer name="Adarsh Ambati" />
+</Base>
+
+<style>
+  .head {
+    margin-bottom: var(--space-6);
+  }
+
+  .head__back {
+    margin-bottom: var(--space-6);
+    font-size: var(--text-sm);
+  }
+
+  .head__period {
+    margin-top: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  .head__summary {
+    max-width: var(--width-prose);
+    margin-top: var(--space-4);
+    font-size: var(--text-lg);
+    line-height: var(--leading-snug);
+    color: var(--color-text-muted);
+  }
+
+  .source {
+    margin-top: var(--space-6);
+    font-size: var(--text-sm);
+  }
+</style>

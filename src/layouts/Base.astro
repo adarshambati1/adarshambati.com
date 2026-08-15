@@ -1,0 +1,87 @@
+---
+import '../styles/index.css';
+import Nav from '../components/Nav.astro';
+import type { NavLink } from '../components/Nav.astro';
+
+interface Props {
+  title: string;
+  description?: string | undefined;
+  /** Which manifest this page advertises — decides what an install becomes. */
+  manifest?: 'site' | 'todo';
+  noindex?: boolean;
+  /** Header brand text. Omit the nav entirely by passing navLinks: []. */
+  brand?: string;
+  navLinks?: readonly NavLink[] | undefined;
+}
+
+const {
+  title,
+  description,
+  manifest = 'site',
+  noindex = false,
+  brand = 'Adarsh Ambati',
+  navLinks,
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://adarshambati.com');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={canonical.href} />
+
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+
+    {
+      !noindex && (
+        <>
+          <meta property="og:type" content="website" />
+          <meta property="og:title" content={title} />
+          {description && <meta property="og:description" content={description} />}
+          <meta property="og:url" content={canonical.href} />
+          <meta name="twitter:card" content="summary" />
+        </>
+      )
+    }
+
+    <!--
+      Manifests are per-page, not per-site. Installing from / gives you the site;
+      installing from the todo app gives an icon that opens straight to the list.
+    -->
+    <link rel="manifest" href={`/manifest-${manifest}.webmanifest`} />
+    <link rel="apple-touch-icon" href="/icons/icon-180.png" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#ffffff" />
+  </head>
+  <body>
+    <Nav name={brand} {...(navLinks ? { links: navLinks } : {})} />
+    <main class="page">
+      <slot />
+    </main>
+    <script>
+      if ('serviceWorker' in navigator) {
+        addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    </script>
+  </body>
+</html>
+
+<style>
+  .page {
+    max-width: var(--width-content);
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-5) var(--space-9);
+  }
+
+  @media (max-width: 30rem) {
+    .page {
+      padding-top: var(--space-6);
+    }
+  }
+</style>

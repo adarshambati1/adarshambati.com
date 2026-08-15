@@ -1,0 +1,87 @@
+---
+/** Typographic defaults for rendered Markdown. Wraps a <Content /> slot. */
+---
+
+<div class="prose">
+  <slot />
+</div>
+
+<style>
+  .prose {
+    max-width: var(--width-prose);
+    color: var(--color-text-muted);
+  }
+
+  .prose :global(p + p),
+  .prose :global(ul),
+  .prose :global(ol) {
+    margin-top: var(--space-4);
+  }
+
+  .prose :global(h2) {
+    margin-top: var(--space-7);
+    margin-bottom: var(--space-3);
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+  }
+
+  .prose :global(h3) {
+    margin-top: var(--space-6);
+    margin-bottom: var(--space-2);
+    font-size: var(--text-base);
+    color: var(--color-text);
+  }
+
+  .prose :global(ul),
+  .prose :global(ol) {
+    padding-left: var(--space-5);
+  }
+
+  .prose :global(li + li) {
+    margin-top: var(--space-1);
+  }
+
+  .prose :global(strong) {
+    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+  }
+
+  .prose :global(blockquote) {
+    margin: var(--space-5) 0;
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-border-strong);
+  }
+
+  .prose :global(table) {
+    width: 100%;
+    margin: var(--space-5) 0;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+
+  .prose :global(th),
+  .prose :global(td) {
+    padding: var(--space-2) var(--space-3) var(--space-2) 0;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .prose :global(th) {
+    color: var(--color-text);
+    font-weight: var(--weight-medium);
+  }
+
+  .prose :global(pre) {
+    margin: var(--space-5) 0;
+    padding: var(--space-4);
+    overflow-x: auto;
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+  }
+
+  .prose :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+</style>

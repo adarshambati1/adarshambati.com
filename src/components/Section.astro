@@ -1,0 +1,40 @@
+---
+/** A titled block. `id` doubles as the nav anchor target. */
+interface Props {
+  id: string;
+  title: string;
+  /** Optional line under the heading. */
+  note?: string;
+}
+
+const { id, title, note } = Astro.props;
+---
+
+<section class="section" id={id}>
+  <div class="section__head">
+    <h2 class="section__title">{title}</h2>
+    {note && <p class="section__note">{note}</p>}
+  </div>
+  <slot />
+</section>
+
+<style>
+  .section {
+    margin-top: var(--space-9);
+  }
+
+  .section__head {
+    margin-bottom: var(--space-5);
+  }
+
+  .section__title {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-semibold);
+  }
+
+  .section__note {
+    margin-top: var(--space-1);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
+  }
+</style>

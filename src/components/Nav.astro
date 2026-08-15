@@ -1,0 +1,104 @@
+---
+/**
+ * Sticky site header. Anchors are root-relative so they work from project
+ * pages as well as the homepage.
+ */
+export interface NavLink {
+  readonly label: string;
+  readonly href: string;
+  readonly external?: boolean;
+}
+
+interface Props {
+  name: string;
+  links?: readonly NavLink[];
+}
+
+const DEFAULT_LINKS: readonly NavLink[] = [
+  { label: 'Research', href: '/#research' },
+  { label: 'Companies', href: '/#companies' },
+  { label: 'Contact', href: '/#contact' },
+];
+
+const { name, links = DEFAULT_LINKS } = Astro.props;
+---
+
+<header class="nav">
+  <div class="nav__inner">
+    <a class="nav__brand" href="/">{name}</a>
+    <nav aria-label="Primary">
+      <ul class="nav__list">
+        {
+          links.map((link) => (
+            <li>
+              <a
+                class="nav__link"
+                href={link.href}
+                {...(link.external ? { rel: 'me noopener', target: '_blank' } : {})}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .nav__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    max-width: var(--width-content);
+    height: var(--header-height);
+    margin: 0 auto;
+    padding: 0 var(--space-5);
+  }
+
+  .nav__brand {
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .nav__list {
+    display: flex;
+    gap: var(--space-5);
+    list-style: none;
+    padding: 0;
+  }
+
+  .nav__link {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .nav__link:hover {
+    color: var(--color-text);
+  }
+
+  /* The brand alone is enough on a narrow screen; the anchors are one scroll
+     away and the row would otherwise wrap into two lines. */
+  @media (max-width: 30rem) {
+    .nav__list {
+      gap: var(--space-4);
+    }
+    .nav__list li:not(:last-child) {
+      display: none;
+    }
+  }
+</style>

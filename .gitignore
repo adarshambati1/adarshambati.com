@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.astro/
+.vercel/
+.output/
+
+# local database
+data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+
+# editor / os
+.DS_Store
+.idea/
+.vscode/
+*.log

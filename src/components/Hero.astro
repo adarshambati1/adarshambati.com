@@ -1,0 +1,96 @@
+---
+/** Top of the homepage: who you are, where you work, and the intro prose. */
+interface Props {
+  name: string;
+  tagline: string;
+  portrait?: string;
+  current?: {
+    role: string;
+    org: string;
+    href?: string | undefined;
+  };
+}
+
+const { name, tagline, portrait, current } = Astro.props;
+---
+
+<section class="hero">
+  {
+    portrait && (
+      <img class="hero__portrait" src={`/${portrait}`} alt="" width="88" height="88" loading="eager" />
+    )
+  }
+
+  <div class="hero__body">
+    <h1 class="hero__name">{name}</h1>
+    <p class="hero__tagline">{tagline}</p>
+
+    {
+      current && (
+        <p class="hero__current">
+          {current.role} at{' '}
+          {current.href ? <a href={current.href}>{current.org}</a> : <span>{current.org}</span>}
+        </p>
+      )
+    }
+  </div>
+</section>
+
+<div class="hero__prose">
+  <slot />
+</div>
+
+<style>
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+  }
+
+  .hero__portrait {
+    flex: none;
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--color-surface);
+  }
+
+  .hero__name {
+    font-size: var(--text-3xl);
+  }
+
+  .hero__tagline {
+    margin-top: var(--space-1);
+    font-size: var(--text-lg);
+    color: var(--color-text-muted);
+    letter-spacing: var(--tracking-normal);
+  }
+
+  .hero__current {
+    margin-top: var(--space-3);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .hero__prose {
+    max-width: var(--width-prose);
+    margin-top: var(--space-6);
+    color: var(--color-text-muted);
+  }
+
+  .hero__prose :global(p + p) {
+    margin-top: var(--space-4);
+  }
+
+  @media (max-width: 30rem) {
+    .hero {
+      align-items: flex-start;
+      gap: var(--space-4);
+    }
+    .hero__portrait {
+      width: 64px;
+      height: 64px;
+    }
+  }
+</style>

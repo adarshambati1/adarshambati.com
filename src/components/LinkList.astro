@@ -1,0 +1,39 @@
+---
+/** Contact row: emails and profiles, rendered as one flat list. */
+interface Props {
+  emails: readonly string[];
+  links: readonly { readonly label: string; readonly href: string }[];
+}
+
+const { emails, links } = Astro.props;
+---
+
+<ul class="linklist">
+  {
+    emails.map((email) => (
+      <li>
+        <a href={`mailto:${email}`}>{email}</a>
+      </li>
+    ))
+  }
+  {
+    links.map((link) => (
+      <li>
+        <a href={link.href} rel="me noopener">
+          {link.label}
+        </a>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .linklist {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    list-style: none;
+    padding: 0;
+    font-size: var(--text-sm);
+  }
+</style>
