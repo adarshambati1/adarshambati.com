@@ -1,7 +1,7 @@
 ---
 import { render } from 'astro:content';
 import Base from '../layouts/Base.astro';
-import Hero from '../components/Hero.astro';
+import HeroFull from '../components/HeroFull.astro';
 import Affiliations from '../components/Affiliations.astro';
 import Section from '../components/Section.astro';
 import Card from '../components/Card.astro';
@@ -13,6 +13,7 @@ import {
   getProfile,
   getFeatured,
   getNotes,
+  heroLinks,
   navActions,
   projectImage,
   projectTarget,
@@ -22,7 +23,7 @@ export const prerender = true;
 
 const profile = await getProfile();
 const { Content } = await render(profile);
-const { name, eyebrow, tagline, description, credentials, affiliations, portrait, emails, links } =
+const { name, eyebrow, tagline, location, description, credentials, affiliations, emails, links } =
   profile.data;
 
 /* The homepage is a landing page, not an archive — a handful of each, with the
@@ -32,12 +33,14 @@ const recentNotes = (await getNotes()).slice(0, 3);
 ---
 
 <Base title={`${name} — ${tagline}`} description={description} navActions={navActions(profile)}>
-  <Hero
+  <HeroFull
+    slot="bleed"
     name={name}
     eyebrow={eyebrow}
     tagline={tagline}
-    portrait={portrait}
+    location={location}
     credentials={credentials}
+    links={heroLinks(profile)}
   />
 
   <Affiliations items={affiliations} />

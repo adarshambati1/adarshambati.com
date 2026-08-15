@@ -26,6 +26,10 @@ const {
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://adarshambati.com');
+
+/* The header is fixed, so pages without a full-bleed hero need to be pushed
+   clear of it. A hero handles its own clearance. */
+const hasBleed: boolean = Astro.slots.has('bleed');
 ---
 
 <!doctype html>
@@ -67,7 +71,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://adarshambat
       {...(navLinks ? { links: navLinks } : {})}
       {...(navActions ? { actions: navActions } : {})}
     />
-    <main class="page">
+    <!-- Full-bleed content (the hero) goes here, outside the centred column. -->
+    <slot name="bleed" />
+    <main class:list={['page', { 'page--offset': !hasBleed }]}>
       <slot />
     </main>
     {
@@ -97,9 +103,16 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://adarshambat
     padding: var(--space-8) var(--space-5) var(--space-9);
   }
 
+  .page--offset {
+    padding-top: calc(var(--header-height) + var(--space-7));
+  }
+
   @media (max-width: 30rem) {
     .page {
       padding-top: var(--space-6);
+    }
+    .page--offset {
+      padding-top: calc(var(--header-height) + var(--space-5));
     }
   }
 </style>

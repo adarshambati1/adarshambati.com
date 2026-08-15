@@ -1,0 +1,271 @@
+---
+import Constellation from './Constellation.astro';
+import HeroVisual from './HeroVisual.astro';
+
+/**
+ * Full-viewport dark hero: drifting point network behind, text left, the
+ * robotics sim right.
+ *
+ * No portrait — the sim carries the right-hand column instead, which is also
+ * the one thing on the page that says "robotics" without needing to be read.
+ */
+export interface Credential {
+  readonly text: string;
+  readonly href?: string | undefined;
+}
+
+export interface HeroLink {
+  readonly label: string;
+  readonly href: string;
+  readonly icon: 'linkedin' | 'github' | 'email';
+}
+
+interface Props {
+  name: string;
+  eyebrow?: string;
+  tagline: string;
+  location?: string;
+  credentials?: readonly Credential[];
+  links?: readonly HeroLink[];
+}
+
+const {
+  name,
+  eyebrow = '',
+  tagline,
+  location = '',
+  credentials = [],
+  links = [],
+} = Astro.props;
+---
+
+<section class="hero">
+  <Constellation />
+
+  <div class="hero__inner">
+    <div class="hero__text">
+      {eyebrow && <p class="hero__eyebrow">{eyebrow}</p>}
+
+      <h1 class="hero__name">{name}</h1>
+      <p class="hero__role">{tagline}</p>
+      {location && <p class="hero__location">{location}</p>}
+
+      {
+        credentials.length > 0 && (
+          <p class="hero__creds">
+            {credentials.map((c) => (
+              <>
+                {c.href ? (
+                  <a class="hero__cred-link" href={c.href} rel="noopener">
+                    {c.text}
+                  </a>
+                ) : (
+                  <span>{c.text}</span>
+                )}{' '}
+              </>
+            ))}
+          </p>
+        )
+      }
+
+      {
+        links.length > 0 && (
+          <ul class="hero__links">
+            {links.map((link) => (
+              <li>
+                <a class="hero__icon" href={link.href} rel="me noopener" aria-label={link.label}>
+                  {link.icon === 'linkedin' && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-.95 1.83-1.95 3.77-1.95 4.03 0 4.78 2.5 4.78 5.76V21h-4v-5.5c0-1.31-.03-3-1.9-3-1.9 0-2.2 1.42-2.2 2.9V21H9z" />
+                    </svg>
+                  )}
+                  {link.icon === 'github' && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
+                    </svg>
+                  )}
+                  {link.icon === 'email' && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h17A1.5 1.5 0 0 1 22 5.5v.4l-10 5.8-10-5.8zM2 8.2V18.5A1.5 1.5 0 0 0 3.5 20h17a1.5 1.5 0 0 0 1.5-1.5V8.2l-9.5 5.5a1 1 0 0 1-1 0z" />
+                    </svg>
+                  )}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+
+    <div class="hero__visual">
+      <HeroVisual size={320} />
+    </div>
+  </div>
+
+  <a class="hero__scroll" href="#about" aria-label="Scroll to about">
+    <span aria-hidden="true"></span>
+  </a>
+</section>
+
+<style>
+  .hero {
+    position: relative;
+    /* dvh so mobile browser chrome doesn't crop the bottom of the hero. */
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    background: #08090d;
+    color: #f2f4fa;
+    overflow: hidden;
+  }
+
+  .hero__inner {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    width: 100%;
+    max-width: 64rem;
+    margin: 0 auto;
+    padding: var(--header-height) var(--space-6) var(--space-8);
+  }
+
+  .hero__text {
+    min-width: 0;
+  }
+
+  .hero__eyebrow {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.02em;
+    color: #8ea0c8;
+    margin-bottom: var(--space-3);
+  }
+
+  .hero__name {
+    font-size: clamp(3rem, 7.5vw, 5.25rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.04em;
+    line-height: 0.98;
+    color: #fff;
+  }
+
+  .hero__role {
+    margin-top: var(--space-3);
+    font-size: clamp(1.15rem, 2.2vw, 1.6rem);
+    font-weight: var(--weight-normal);
+    color: #b9c4dc;
+    letter-spacing: -0.015em;
+  }
+
+  .hero__location {
+    margin-top: var(--space-1);
+    font-size: var(--text-base);
+    color: #7e8caa;
+  }
+
+  .hero__creds {
+    max-width: 32rem;
+    margin-top: var(--space-5);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    color: #9aa7c4;
+  }
+
+  .hero__cred-link {
+    color: #9db4ff;
+    text-decoration: none;
+  }
+
+  .hero__cred-link:hover {
+    color: #c3d1ff;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .hero__links {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+    padding: 0;
+    list-style: none;
+  }
+
+  .hero__icon {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    color: #dbe3f5;
+    border: 1px solid rgba(219, 227, 245, 0.32);
+    border-radius: 50%;
+    text-decoration: none;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+  }
+
+  .hero__icon svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  .hero__icon:hover {
+    color: #08090d;
+    background: #dbe3f5;
+    border-color: #dbe3f5;
+  }
+
+  .hero__visual {
+    flex: none;
+  }
+
+  /* Scroll cue: a line that drifts down, hinting there's a page below the fold.
+     Without it a full-viewport hero reads as the whole site. */
+  .hero__scroll {
+    position: absolute;
+    left: 50%;
+    bottom: var(--space-5);
+    z-index: 1;
+    width: 1px;
+    height: 2.5rem;
+    transform: translateX(-50%);
+    overflow: hidden;
+  }
+
+  .hero__scroll span {
+    display: block;
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(to bottom, transparent, rgba(219, 227, 245, 0.75));
+    animation: drift 2.4s ease-in-out infinite;
+  }
+
+  @keyframes drift {
+    0% {
+      transform: translateY(-100%);
+    }
+    60%,
+    100% {
+      transform: translateY(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero__scroll span {
+      animation: none;
+      transform: none;
+    }
+  }
+
+  @media (max-width: 52rem) {
+    .hero__inner {
+      flex-direction: column-reverse;
+      align-items: flex-start;
+      justify-content: center;
+      gap: var(--space-6);
+      padding-top: calc(var(--header-height) + var(--space-6));
+    }
+  }
+</style>

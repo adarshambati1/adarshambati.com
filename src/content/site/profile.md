@@ -2,6 +2,7 @@
 name: Adarsh Ambati
 eyebrow: Stanford · Applied Intuition
 tagline: Robotics and physical intelligence
+location: San Francisco Bay Area
 description: >-
   Adarsh Ambati — software engineer at Applied Intuition working on robotics and
   physical intelligence. Previously co-founded Candor Security (YC W25) and Sophris.

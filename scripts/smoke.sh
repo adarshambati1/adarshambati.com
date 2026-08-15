@@ -29,6 +29,11 @@ has "linkedin present"      "$(curl -s $B/)" "linkedin.com/in/adarshambati"
 chk "home is indexable"     "$(curl -s $B/ | grep -c noindex)" 0
 has "canonical set"         "$(curl -s $B/)" "adarshambati.com"
 has "hero visual present"   "$(curl -s $B/)" "data-hero-visual"
+has "constellation bg"      "$(curl -s $B/)" "data-constellation"
+has "hero location"         "$(curl -s $B/)" "San Francisco Bay Area"
+has "hero social icons"     "$(curl -s $B/)" "hero__icon"
+# No portrait anywhere in the hero — the sim carries the right column.
+chk "no portrait img"       "$(curl -s $B/ | grep -c 'hero__portrait')" 0
 # The homepage is a landing page: only featured entries, full list one click away.
 chk "home omits earlier work" "$(curl -s $B/ | grep -c 'Gro-STEMs')" 0
 has "home links to projects"  "$(curl -s $B/)" "View all projects"

@@ -85,6 +85,20 @@ export function projectImage(p: Project): string {
   return p.data.image || `/projects/${p.id}.svg`;
 }
 
+/** Icon buttons in the hero. Falls back gracefully if a link is absent. */
+export function heroLinks(
+  profile: Profile,
+): readonly { label: string; href: string; icon: 'linkedin' | 'github' | 'email' }[] {
+  const out: { label: string; href: string; icon: 'linkedin' | 'github' | 'email' }[] = [];
+  for (const link of profile.data.links) {
+    if (/linkedin/i.test(link.label)) out.push({ ...link, icon: 'linkedin' });
+    else if (/github/i.test(link.label)) out.push({ ...link, icon: 'github' });
+  }
+  const email = profile.data.emails[0];
+  if (email) out.push({ label: 'Email', href: `mailto:${email}`, icon: 'email' });
+  return out;
+}
+
 /** The contact pills in the header. */
 export function navActions(profile: Profile): readonly NavAction[] {
   const linkedin = profile.data.links.find((l) => /linkedin/i.test(l.label));

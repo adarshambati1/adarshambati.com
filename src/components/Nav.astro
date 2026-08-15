@@ -74,13 +74,18 @@ const isCurrent = (href: string): boolean => href !== '/' && path.startsWith(hre
 </header>
 
 <style>
+  /* Dark throughout, so it reads correctly over the dark full-screen hero and
+     stays consistent on the light inner pages. */
   .nav {
-    position: sticky;
+    position: fixed;
     top: 0;
-    z-index: 10;
-    background: color-mix(in srgb, var(--color-bg) 88%, transparent);
-    backdrop-filter: saturate(180%) blur(12px);
-    border-bottom: 1px solid var(--color-border);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: rgba(8, 9, 13, 0.82);
+    backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid rgba(219, 227, 245, 0.12);
+    color: #f2f4fa;
   }
 
   .nav__inner {
@@ -98,6 +103,11 @@ const isCurrent = (href: string): boolean => href !== '/' && path.startsWith(hre
     letter-spacing: var(--tracking-tight);
     text-decoration: none;
     white-space: nowrap;
+    color: #fff;
+  }
+
+  .nav__brand:hover {
+    color: #fff;
   }
 
   .nav__sections {
@@ -119,13 +129,13 @@ const isCurrent = (href: string): boolean => href !== '/' && path.startsWith(hre
 
   .nav__link {
     font-size: var(--text-sm);
-    color: var(--color-text-muted);
+    color: #9aa7c4;
     text-decoration: none;
   }
 
   .nav__link:hover,
   .nav__link--current {
-    color: var(--color-text);
+    color: #fff;
   }
 
   .pill {
@@ -133,18 +143,18 @@ const isCurrent = (href: string): boolean => href !== '/' && path.startsWith(hre
     padding: 0.4rem 0.85rem;
     font-size: var(--text-xs);
     font-weight: var(--weight-medium);
-    color: var(--color-accent);
-    border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+    color: #dbe3f5;
+    border: 1px solid rgba(219, 227, 245, 0.32);
     border-radius: 999px;
     text-decoration: none;
     white-space: nowrap;
-    transition: background var(--transition), border-color var(--transition);
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
   }
 
   .pill:hover {
-    color: var(--color-accent);
-    background: color-mix(in srgb, var(--color-accent) 7%, transparent);
-    border-color: var(--color-accent);
+    color: #08090d;
+    background: #dbe3f5;
+    border-color: #dbe3f5;
   }
 
   .pill--primary {

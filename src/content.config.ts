@@ -16,6 +16,8 @@ const profile = defineCollection({
     eyebrow: z.string().default(''),
     /** The one line under your name. Keep it short. */
     tagline: z.string(),
+    /** Shown under the tagline in the hero. */
+    location: z.string().default(''),
     /** Used for <meta description> and link previews. */
     description: z.string(),
     /**
