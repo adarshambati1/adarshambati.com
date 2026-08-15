@@ -22,8 +22,11 @@ import { fileURLToPath } from 'node:url';
 
 const ARCHIVE =
   'https://huggingface.co/datasets/georghess/pandaset/resolve/main/pandaset.zip';
-const SEQUENCE = process.argv[2] ?? '019';
-const FRAME = (process.argv[3] ?? '00').padStart(2, '0');
+/** One or more "sequence/frame" pairs, e.g. 019/00 092/20. */
+const REQUESTS = (process.argv.slice(2).length ? process.argv.slice(2) : ['019/00']).map((arg) => {
+  const [seq, frame = '00'] = arg.split('/');
+  return { seq, frame: frame.padStart(2, '0') };
+});
 
 const OUT_DIR = fileURLToPath(new URL('../.cache/pandaset/', import.meta.url));
 
@@ -121,21 +124,25 @@ async function extract(url, entry) {
 const files = await readDirectory(ARCHIVE);
 mkdirSync(OUT_DIR, { recursive: true });
 
-const wanted = [
-  [`pandaset/${SEQUENCE}/lidar/${FRAME}.pkl.gz`, 'frame.pkl', true],
-  [`pandaset/${SEQUENCE}/lidar/poses.json`, 'poses.json', false],
-];
-
-for (const [path, out, isGz] of wanted) {
-  const entry = files.get(path);
-  if (!entry) {
-    console.error(`not in archive: ${path}`);
-    process.exit(1);
+// The directory read above is the expensive part, so all requested frames
+// come out of the one pass.
+for (const { seq, frame } of REQUESTS) {
+  const tag = `${seq}-${frame}`;
+  const wanted = [
+    [`pandaset/${seq}/lidar/${frame}.pkl.gz`, `${tag}.pkl`, true],
+    [`pandaset/${seq}/lidar/poses.json`, `${tag}.poses.json`, false],
+  ];
+  for (const [path, out, isGz] of wanted) {
+    const entry = files.get(path);
+    if (!entry) {
+      console.error(`not in archive: ${path}`);
+      process.exit(1);
+    }
+    const member = await extract(ARCHIVE, entry);
+    const data = isGz ? gunzipSync(member) : member;
+    writeFileSync(OUT_DIR + out, data);
+    console.log(`  ${path}  ->  .cache/pandaset/${out}  (${(data.length / 1e6).toFixed(2)} MB)`);
   }
-  const member = await extract(ARCHIVE, entry);
-  const data = isGz ? gunzipSync(member) : member;
-  writeFileSync(OUT_DIR + out, data);
-  console.log(`  ${path}  ->  .cache/pandaset/${out}  (${(data.length / 1e6).toFixed(2)} MB)`);
 }
 
 console.log('\nnow run: python3 scripts/bake-pandaset-frame.py');

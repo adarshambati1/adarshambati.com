@@ -17,7 +17,7 @@
  */
 interface Props {
   /** Pin a scene instead of choosing at random. */
-  mode?: 'auto' | 'cars' | 'arm' | 'real';
+  mode?: 'auto' | 'scan' | 'arm';
 }
 
 const { mode = 'auto' } = Astro.props;
@@ -35,7 +35,7 @@ const { mode = 'auto' } = Astro.props;
     <div><dt data-label="c">Range</dt><dd data-stat="c">—</dd></div>
   </dl>
 
-  <p class="scene__hint" aria-hidden="true">drag to rotate</p>
+  <p class="scene__hint" aria-hidden="true">drag to rotate · shift-drag to zoom</p>
 </div>
 
 <style>
@@ -179,78 +179,25 @@ const { mode = 'auto' } = Astro.props;
     return { x: cam.cx + x1 * cam.zoom * k, y: cam.cy - height * cam.zoom * k, depth, k };
   }
 
-  /* ----------------------------------------------------------- car scene -- */
-
-  interface Box {
-    cx: number;
-    cy: number;
-    z0: number;
-    z1: number;
-    hx: number;
-    hy: number;
-    yaw: number;
-  }
-
-  /** A car as two stacked boxes: body, then a shorter inset cabin. */
-  function car(cx: number, cy: number, yaw: number, scale = 1): Box[] {
-    const l = 4.5 * scale;
-    const w = 1.85 * scale;
-    return [
-      { cx, cy, z0: 0.28, z1: 0.95, hx: l / 2, hy: w / 2, yaw },
-      { cx, cy, z0: 0.95, z1: 1.5, hx: l * 0.27, hy: w * 0.44, yaw },
-    ];
-  }
-
-  const BOXES: Box[] = [
-    ...car(6.2, 2.9, 0.02),
-    ...car(13.5, 3.1, -0.03),
-    ...car(20.5, 2.9, 0.015),
-    ...car(8.5, -3.0, Math.PI),
-    ...car(16.5, -3.2, Math.PI + 0.04),
-    ...car(-6.5, -2.9, Math.PI),
-    ...car(-12, 3.0, 0.02),
-    ...car(3.4, 6.4, 0.44, 1.22),
-  ];
-
-  const SENSOR_H = 1.9;
-  const BEAMS = 26;
-  const AZIMUTH_STEPS = 680;
-  const MAX_RANGE = 27;
-
-  function hitBox(o: Vec3, d: Vec3, b: Box): number {
-    const c = Math.cos(-b.yaw);
-    const s = Math.sin(-b.yaw);
-    const ox = (o[0] - b.cx) * c - (o[1] - b.cy) * s;
-    const oy = (o[0] - b.cx) * s + (o[1] - b.cy) * c;
-    const dx = d[0] * c - d[1] * s;
-    const dy = d[0] * s + d[1] * c;
-
-    let tmin = 0;
-    let tmax = MAX_RANGE;
-    const slab = (start: number, dir: number, lo: number, hi: number): boolean => {
-      if (Math.abs(dir) < 1e-9) return start >= lo && start <= hi;
-      let t0 = (lo - start) / dir;
-      let t1 = (hi - start) / dir;
-      if (t0 > t1) [t0, t1] = [t1, t0];
-      tmin = Math.max(tmin, t0);
-      tmax = Math.min(tmax, t1);
-      return tmax >= tmin;
-    };
-
-    if (!slab(ox, dx, -b.hx, b.hx)) return Infinity;
-    if (!slab(oy, dy, -b.hy, b.hy)) return Infinity;
-    if (!slab(o[2], d[2], b.z0, b.z1)) return Infinity;
-    return tmin > 0.05 ? tmin : Infinity;
-  }
+  /* --------------------------------------------------------- point cloud -- */
 
   interface Cloud {
     xyz: Float32Array;
     rgb: Uint8Array;
-    /** 1 = vehicle. Vehicles draw larger and brighter than road. */
+    /** 1 = above the road surface. Objects draw larger and brighter. */
     kind: Uint8Array;
     count: number;
   }
 
+  interface FrameInfo {
+    id: string;
+    sequence: string;
+    frame: number;
+    points: number;
+    file: string;
+  }
+
+  /** Blue -> cyan -> green -> amber, the usual height ramp on scan viewers. */
   function ramp(t: number): [number, number, number] {
     const u = clamp(t, 0, 1);
     const stops: [number, [number, number, number]][] = [
@@ -275,84 +222,43 @@ const { mode = 'auto' } = Astro.props;
     return stops[stops.length - 1]![1];
   }
 
-  /** One revolution of the sensor, cast against the scene. Runs once. */
-  function scanStreet(): Cloud {
-    const cap = BEAMS * AZIMUTH_STEPS;
-    const xyz = new Float32Array(cap * 3);
-    const rgb = new Uint8Array(cap * 3);
-    const kind = new Uint8Array(cap);
-    const origin: Vec3 = [0, 0, SENSOR_H];
-    const elMin = (-23 * Math.PI) / 180;
-    const elMax = (2.5 * Math.PI) / 180;
-    let n = 0;
-
-    for (let b = 0; b < BEAMS; b++) {
-      const el = elMin + ((elMax - elMin) * b) / (BEAMS - 1);
-      const ce = Math.cos(el);
-      const se = Math.sin(el);
-
-      for (let a = 0; a < AZIMUTH_STEPS; a++) {
-        const az = (a / AZIMUTH_STEPS) * Math.PI * 2;
-        const dir: Vec3 = [Math.cos(az) * ce, Math.sin(az) * ce, se];
-
-        let best = dir[2] < -1e-6 ? -origin[2] / dir[2] : Infinity;
-        let vehicle = false;
-        for (const box of BOXES) {
-          const t = hitBox(origin, dir, box);
-          if (t < best) {
-            best = t;
-            vehicle = true;
-          }
-        }
-        if (!Number.isFinite(best) || best > MAX_RANGE) continue;
-
-        const px = origin[0] + dir[0] * best;
-        const py = origin[1] + dir[1] * best;
-        const pz = origin[2] + dir[2] * best;
-        xyz[n * 3] = px;
-        xyz[n * 3 + 1] = py;
-        xyz[n * 3 + 2] = pz;
-
-        const [r, g, bb] = ramp(pz / 2.0);
-        // Vehicles read hotter than road so the shapes separate.
-        kind[n] = vehicle ? 1 : 0;
-        const lift = vehicle ? 1.25 : 0.82;
-        rgb[n * 3] = Math.min(255, Math.round(r * lift));
-        rgb[n * 3 + 1] = Math.min(255, Math.round(g * lift));
-        rgb[n * 3 + 2] = Math.min(255, Math.round(bb * lift));
-        n++;
-      }
-    }
-    return { xyz, rgb, kind, count: n };
-  }
-
   let CLOUD: Cloud | null = null;
 
+  /** Which frames exist, from the manifest the bake script writes. */
+  async function loadManifest(): Promise<FrameInfo[]> {
+    try {
+      const res = await fetch('/data/lidar-frames.json');
+      if (!res.ok) return [];
+      const body = (await res.json()) as { frames?: FrameInfo[] };
+      return body.frames ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   /**
-   * Loads the real PandaSet frame baked by scripts/bake-pandaset-frame.py.
-   *
-   * Streamed as a binary rather than inlined, so the JS bundle stays small and
-   * the scene can draw its grid while the points are still arriving.
+   * Decodes a baked scan.
    *
    * Layout: "LIDR", uint32 count, 3 floats origin, 3 floats scale, then
    * count*3 uint16 quantised xyz, then count uint8 intensity.
    */
-  async function loadRealFrame(): Promise<Cloud | null> {
+  async function loadFrame(url: string): Promise<Cloud | null> {
     try {
-      const res = await fetch('/data/lidar-frame.bin');
+      const res = await fetch(url);
       if (!res.ok) return null;
       const buf = await res.arrayBuffer();
       const view = new DataView(buf);
-      if (String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'LIDR') {
-        return null;
-      }
+      const magic = String.fromCharCode(
+        view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3),
+      );
+      if (magic !== 'LIDR') return null;
+
       const count = view.getUint32(4, true);
       const lo = [view.getFloat32(8, true), view.getFloat32(12, true), view.getFloat32(16, true)];
       const sc = [view.getFloat32(20, true), view.getFloat32(24, true), view.getFloat32(28, true)];
 
-      const qOffset = 32;
-      const q = new Uint16Array(buf, qOffset, count * 3);
-      const inten = new Uint8Array(buf, qOffset + count * 6, count);
+      const q = new Uint16Array(buf, 32, count * 3);
+      const inten = new Uint8Array(buf, 32 + count * 6, count);
 
       const xyz = new Float32Array(count * 3);
       const rgb = new Uint8Array(count * 3);
@@ -366,14 +272,13 @@ const { mode = 'auto' } = Astro.props;
         xyz[i * 3 + 1] = y;
         xyz[i * 3 + 2] = z;
 
-        // Height ramp, brightened by return intensity — real scans carry it and
-        // it's what separates road paint, plates and glass from everything else.
+        // Height ramp brightened by return intensity — that's what separates
+        // road paint, plates and retroreflectors from everything else.
         const [r, g, b] = ramp((z + 2.2) / 5.2);
-        const lift = 0.72 + ((inten[i] ?? 0) / 255) * 0.75;
+        const lift = 1.05 + ((inten[i] ?? 0) / 255) * 0.55;
         rgb[i * 3] = Math.min(255, Math.round(r * lift));
         rgb[i * 3 + 1] = Math.min(255, Math.round(g * lift));
         rgb[i * 3 + 2] = Math.min(255, Math.round(b * lift));
-        // Anything standing above the road reads as an object.
         kind[i] = z > -0.7 ? 1 : 0;
       }
       return { xyz, rgb, kind, count };
@@ -382,25 +287,17 @@ const { mode = 'auto' } = Astro.props;
     }
   }
 
-
   function drawCloud(ctx: CanvasRenderingContext2D, w: number, h: number, cam: Cam): void {
     const cloud = CLOUD;
-    if (!cloud) return;
 
-    // Ground grid under the points, for scale.
+    // Ground grid, drawn whether or not the points have arrived yet.
     ctx.strokeStyle = 'rgba(120,150,215,0.075)';
     ctx.lineWidth = 1;
-    const span = 30;
+    const span = 24;
     for (let g = -span; g <= span; g += 6) {
       for (const [a, b] of [
-        [
-          [g, -span, 0],
-          [g, span, 0],
-        ],
-        [
-          [-span, g, 0],
-          [span, g, 0],
-        ],
+        [[g, -span, 0], [g, span, 0]],
+        [[-span, g, 0], [span, g, 0]],
       ] as [Vec3, Vec3][]) {
         const p1 = project(a, cam);
         const p2 = project(b, cam);
@@ -410,6 +307,7 @@ const { mode = 'auto' } = Astro.props;
         ctx.stroke();
       }
     }
+    if (!cloud) return;
 
     for (let i = 0; i < cloud.count; i++) {
       const p = project(
@@ -417,14 +315,15 @@ const { mode = 'auto' } = Astro.props;
         cam,
       );
       if (p.k <= 0 || p.x < -4 || p.x > w + 4 || p.y < -4 || p.y > h + 4) continue;
-      const isVehicle = cloud.kind[i] === 1;
-      const size = isVehicle ? (p.k > 0.7 ? 2.6 : 2) : p.k > 0.8 ? 1.6 : 1.2;
-      const alpha = isVehicle ? 0.62 + p.k * 0.38 : 0.22 + p.k * 0.34;
+      const object = cloud.kind[i] === 1;
+      const size = object ? (p.k > 0.7 ? 2.6 : 2.1) : p.k > 0.8 ? 1.8 : 1.4;
+      const alpha = object ? 0.8 + p.k * 0.2 : 0.46 + p.k * 0.4;
       ctx.fillStyle = `rgba(${cloud.rgb[i * 3]},${cloud.rgb[i * 3 + 1]},${cloud.rgb[i * 3 + 2]},${alpha.toFixed(2)})`;
       ctx.fillRect(p.x, p.y, size, size);
     }
 
-    const origin = project([0, 0, SENSOR_H], cam);
+    // Sensor origin.
+    const origin = project([0, 0, 1.9], cam);
     ctx.fillStyle = 'rgba(235,244,255,0.95)';
     ctx.beginPath();
     ctx.arc(origin.x, origin.y, 2.6, 0, Math.PI * 2);
@@ -692,22 +591,16 @@ const { mode = 'auto' } = Astro.props;
     // link to or screenshot a specific one. Otherwise it's a coin flip.
     const override = new URLSearchParams(location.search).get('scene');
     const requested = override ?? canvas.dataset.mode;
-    const mode: 'cars' | 'arm' | 'real' =
-      requested === 'cars' || requested === 'arm' || requested === 'real'
-        ? requested
-        : Math.random() < 0.5
-          ? 'cars'
-          : 'arm';
+    // 'real' and 'cars' are kept as aliases so old links don't break.
+    const alias: Record<string, 'scan' | 'arm'> = {
+      real: 'scan',
+      cars: 'scan',
+      scan: 'scan',
+      arm: 'arm',
+    };
+    const resolved = requested ? alias[requested] : undefined;
+    const mode: 'scan' | 'arm' = resolved ?? (Math.random() < 0.5 ? 'scan' : 'arm');
 
-    if (mode === 'cars') CLOUD = scanStreet();
-    if (mode === 'real') {
-      // Async: the grid draws immediately, points appear when they land.
-      void loadRealFrame().then((cloud) => {
-        CLOUD = cloud;
-        stat('b', 'Points', (cloud?.count ?? 0).toLocaleString('en-GB'));
-        stat('c', 'Source', cloud ? 'PandaSet' : 'unavailable');
-      });
-    }
 
     const stat = (slot: string, label: string, value: string): void => {
       const dt = root?.querySelector<HTMLElement>(`[data-label="${slot}"]`);
@@ -716,11 +609,7 @@ const { mode = 'auto' } = Astro.props;
       if (dd) dd.textContent = value;
     };
 
-    if (mode === 'cars') {
-      stat('a', 'Source', 'Simulated');
-      stat('b', 'Points', (CLOUD?.count ?? 0).toLocaleString('en-GB'));
-      stat('c', 'Range', `${MAX_RANGE} m`);
-    } else if (mode === 'real') {
+    if (mode === 'scan') {
       stat('a', 'Scan', 'Pandar64');
       stat('b', 'Points', 'loading…');
       stat('c', 'Source', 'PandaSet');
@@ -730,8 +619,29 @@ const { mode = 'auto' } = Astro.props;
       stat('c', 'Solver', 'CCD IK');
     }
 
+    if (mode === 'scan') {
+      // Async: the grid draws immediately, points appear when they land.
+      // ?frame=<id> or ?frame=<n> picks one; otherwise it's random per visit.
+      void (async () => {
+        const frames = await loadManifest();
+        if (frames.length === 0) return;
+        const want = new URLSearchParams(location.search).get('frame');
+        const picked =
+          frames.find((f) => f.id === want) ??
+          (want !== null && Number.isFinite(Number(want)) ? frames[Number(want) % frames.length] : undefined) ??
+          frames[Math.floor(Math.random() * frames.length)]!;
+
+        CLOUD = await loadFrame(picked.file);
+        stat('a', 'Scan', `Seq ${picked.sequence}`);
+        stat('b', 'Points', (CLOUD?.count ?? 0).toLocaleString('en-GB'));
+        stat('c', 'Source', CLOUD ? 'PandaSet' : 'unavailable');
+      })();
+    }
+
     let az = mode === 'arm' ? -0.75 : -0.62;
-    let el = mode === 'arm' ? 0.3 : mode === 'real' ? 0.5 : 0.44;
+    /** User zoom multiplier on top of the scene's base scale. */
+    let zoomFactor = 1;
+    let el = mode === 'arm' ? 0.3 : 0.5;
     let t = 0;
     let raf = 0;
     let w = 0;
@@ -751,11 +661,11 @@ const { mode = 'auto' } = Astro.props;
     function camera(): Cam {
       // Composed right of centre so the scene doesn't sit under the headline.
       const wide = w > 900;
-      return mode !== 'arm'
+      return mode === 'scan'
         ? {
             az,
             el,
-            zoom: Math.min(w, h) / (mode === 'real' ? 34 : 15),
+            zoom: (Math.min(w, h) / 34) * zoomFactor,
             cx: wide ? w * 0.66 : w * 0.5,
             cy: h * 0.58,
             persp: 0.014,
@@ -763,7 +673,7 @@ const { mode = 'auto' } = Astro.props;
         : {
             az,
             el,
-            zoom: Math.min(w, h) * 0.5,
+            zoom: Math.min(w, h) * 0.5 * zoomFactor,
             cx: wide ? w * 0.68 : w * 0.5,
             cy: h * 0.74,
             persp: 0.16,
@@ -775,7 +685,7 @@ const { mode = 'auto' } = Astro.props;
       ctx.fillStyle = '#080a10';
       ctx.fillRect(0, 0, w, h);
       const cam = camera();
-      if (mode !== 'arm') {
+      if (mode === 'scan') {
         drawCloud(ctx, w, h, cam);
       } else {
         armIK(angles, armScene(t).target, reduced ? 40 : 3);
@@ -795,10 +705,39 @@ const { mode = 'auto' } = Astro.props;
     });
     canvas.addEventListener('pointermove', (e: PointerEvent) => {
       if (!dragging) return;
-      az -= (e.clientX - lastX) * 0.006;
-      el = clamp(el + (e.clientY - lastY) * 0.004, 0.04, 1.1);
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+
+      if (e.shiftKey) {
+        // Shift-drag zooms instead of orbiting.
+        zoomFactor = clamp(zoomFactor * Math.exp(-dy * 0.004), 0.4, 5);
+      } else {
+        az -= dx * 0.006;
+        el = clamp(el + dy * 0.004, 0.04, 1.1);
+      }
+
       lastX = e.clientX;
       lastY = e.clientY;
+      if (reduced) render();
+    });
+
+    // Shift + wheel zooms too. Without the modifier the wheel keeps scrolling
+    // the page — hijacking it on a full-viewport hero would trap the reader.
+    canvas.addEventListener(
+      'wheel',
+      (e: WheelEvent) => {
+        if (!e.shiftKey) return;
+        e.preventDefault();
+        zoomFactor = clamp(zoomFactor * Math.exp(-e.deltaY * 0.0015), 0.4, 5);
+        if (reduced) render();
+      },
+      { passive: false },
+    );
+
+    // Double-click resets the view.
+    canvas.addEventListener('dblclick', () => {
+      zoomFactor = 1;
+      el = mode === 'arm' ? 0.3 : 0.5;
       if (reduced) render();
     });
     const endDrag = (e: PointerEvent): void => {

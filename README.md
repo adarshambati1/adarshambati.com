@@ -191,18 +191,25 @@ Apache-2.0. Decimated and quantised by `scripts/bake-flexiv-arm.mjs`
 (43,737 triangles to 3,177, 39 KB). Joint origins, axes and limits are the real
 ones from `config/Rizon4s/`.
 
-**LiDAR street scan** — one frame from [PandaSet](https://pandaset.org) by Hesai
-and Scale AI, licensed **CC BY 4.0**. Sequence 019, frame 00, mechanical
-Pandar64 only, cropped to 38 m and voxel-downsampled to 18,372 points.
+**LiDAR street scans** — four frames from [PandaSet](https://pandaset.org) by
+Hesai and Scale AI, licensed **CC BY 4.0**. Sequences 019, 021, 064 and 092,
+mechanical Pandar64 only, cropped to 38 m and voxel-downsampled to ~18k points
+each (~125 KB per frame).
+
+PandaSet was the only workable choice: KITTI, nuScenes and Argoverse are all
+non-commercial, and this repo is public.
 
 PandaSet is mirrored as a single 44.5 GB zip, so `scripts/fetch-pandaset-frame.mjs`
 reads the archive's central directory over HTTP range requests and pulls just the
 one member — about 12 MB rather than the whole thing. Then:
 
 ```bash
-npm run lidar:fetch      # range-fetch one frame (needs network)
-npm run lidar:bake       # decimate + quantise -> public/data/lidar-frame.bin
+npm run lidar:fetch 019/00 092/20 021/40 064/10   # range-fetch (needs network)
+npm run lidar:bake                                 # decimate -> public/data/
 ```
+
+The fetch reads the 9 MB central directory once and pulls every requested frame
+from that single pass.
 
 The bake step needs numpy and pandas, since PandaSet frames are pickled
 DataFrames. If your system Python lacks them, use a venv rather than fighting it:
@@ -218,11 +225,16 @@ The hero picks a scene per visit. Pin one with a query parameter:
 
 | URL | Scene |
 | --- | --- |
+| `/?scene=scan` | A real PandaSet LiDAR frame |
 | `/?scene=arm` | Flexiv Rizon 4s picking a grape, FK + CCD IK |
-| `/?scene=cars` | Simulated LiDAR — ray-cast against boxes |
-| `/?scene=real` | Real PandaSet scan |
 
-All three are drag-to-rotate and hold still under `prefers-reduced-motion`.
+Without the parameter it picks one at random per visit. `?frame=092-20` pins a
+specific scan; the ids are in `public/data/lidar-frames.json`.
+
+**Controls:** drag to rotate, shift-drag or shift-scroll to zoom, double-click to
+reset. Plain scrolling is left alone deliberately — hijacking the wheel on a
+full-viewport hero traps the reader. Both scenes hold still under
+`prefers-reduced-motion`.
 
 `npm run test:arm` drives the arm through four full pick cycles and asserts it
 never self-collides, never drops a link below the bench, and never leaves a

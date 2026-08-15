@@ -1,0 +1,35 @@
+{
+  "source": "PandaSet by Hesai and Scale AI",
+  "license": "CC BY 4.0",
+  "url": "https://pandaset.org",
+  "frames": [
+    {
+      "id": "019-00",
+      "sequence": "019",
+      "frame": 0,
+      "points": 18372,
+      "file": "/data/lidar-019-00.bin"
+    },
+    {
+      "id": "021-40",
+      "sequence": "021",
+      "frame": 40,
+      "points": 17908,
+      "file": "/data/lidar-021-40.bin"
+    },
+    {
+      "id": "064-10",
+      "sequence": "064",
+      "frame": 10,
+      "points": 16515,
+      "file": "/data/lidar-064-10.bin"
+    },
+    {
+      "id": "092-20",
+      "sequence": "092",
+      "frame": 20,
+      "points": 18168,
+      "file": "/data/lidar-092-20.bin"
+    }
+  ]
+}
