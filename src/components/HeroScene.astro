@@ -681,7 +681,10 @@ const { mode = 'auto' } = Astro.props;
 
     const root = canvas.closest('.scene');
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const requested = canvas.dataset.mode;
+    // ?scene=cars or ?scene=arm forces a scene, which makes it possible to
+    // link to or screenshot a specific one. Otherwise it's a coin flip.
+    const override = new URLSearchParams(location.search).get('scene');
+    const requested = override ?? canvas.dataset.mode;
     const mode: 'cars' | 'arm' =
       requested === 'cars' || requested === 'arm'
         ? requested
