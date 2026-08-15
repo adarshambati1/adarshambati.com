@@ -7,8 +7,9 @@ dist/
 .vercel/
 .output/
 
-# local database
-data/
+# local database — anchored to the repo root, or it also swallows
+# src/data/ (the baked arm) and public/data/ (the baked scan)
+/data/
 *.sqlite
 *.sqlite-*
 *.db
@@ -24,3 +25,6 @@ data/
 .idea/
 .vscode/
 *.log
+
+# fetched dataset frames (regenerate with npm run lidar:fetch)
+.cache/

@@ -39,14 +39,15 @@ instead. That way there are no stub pages that just repeat the summary.
 
 Tokens live in `src/styles/index.css` — colour, type scale, spacing, radii.
 Components never hardcode a value; if you need one that doesn't exist, add a
-token. Typeface is Inter, self-hosted via `@fontsource-variable/inter`, so
-there's no request to Google Fonts.
+token. Typeface is Hanken Grotesk, self-hosted via
+`@fontsource-variable/hanken-grotesk`, so there's no request to Google Fonts.
 
-Components are in `src/components`: `Nav`, `Hero`, `Section`, `Card`, `Prose`,
-`LinkList`, `Footer`.
+Components are in `src/components`: `Nav`, `HeroFull`, `HeroScene`,
+`Affiliations`, `Section`, `Card`, `NoteRow`, `Prose`, `LinkList`, `Footer`.
 
-Light mode only, deliberately. Adding dark mode means duplicating the token
-block under `prefers-color-scheme` — nothing else references a raw colour.
+The hero is dark; the pages below it are light. Making the whole site dark means
+duplicating the token block in `src/styles/index.css` — nothing else references
+a raw colour.
 
 ## Running it
 
@@ -173,9 +174,60 @@ npm run dev            # one terminal
 bash scripts/smoke.sh  # another
 ```
 
-42 checks: public rendering, route gating, the OAuth handshake, the sync
+64 checks: public rendering, route gating, the OAuth handshake, the sync
 protocol, field-level merge, tombstones, the Siri endpoints, and PWA wiring. The
 Google round-trip itself isn't covered — it needs a real browser and account.
+
+`npm run verify` runs `astro check` (strictest), the build, and the arm safety
+test together.
+
+## Credits
+
+The hero renders two things that aren't mine:
+
+**Flexiv Rizon 4s** — meshes and kinematics from
+[flexivrobotics/flexiv_description](https://github.com/flexivrobotics/flexiv_description),
+Apache-2.0. Decimated and quantised by `scripts/bake-flexiv-arm.mjs`
+(43,737 triangles to 3,177, 39 KB). Joint origins, axes and limits are the real
+ones from `config/Rizon4s/`.
+
+**LiDAR street scan** — one frame from [PandaSet](https://pandaset.org) by Hesai
+and Scale AI, licensed **CC BY 4.0**. Sequence 019, frame 00, mechanical
+Pandar64 only, cropped to 38 m and voxel-downsampled to 18,372 points.
+
+PandaSet is mirrored as a single 44.5 GB zip, so `scripts/fetch-pandaset-frame.mjs`
+reads the archive's central directory over HTTP range requests and pulls just the
+one member — about 12 MB rather than the whole thing. Then:
+
+```bash
+npm run lidar:fetch      # range-fetch one frame (needs network)
+npm run lidar:bake       # decimate + quantise -> public/data/lidar-frame.bin
+```
+
+The bake step needs numpy and pandas, since PandaSet frames are pickled
+DataFrames. If your system Python lacks them, use a venv rather than fighting it:
+
+```bash
+python3 -m venv .venv && ./.venv/bin/pip install "numpy<2" pandas
+./.venv/bin/python scripts/bake-pandaset-frame.py
+```
+
+## Hero scenes
+
+The hero picks a scene per visit. Pin one with a query parameter:
+
+| URL | Scene |
+| --- | --- |
+| `/?scene=arm` | Flexiv Rizon 4s picking a grape, FK + CCD IK |
+| `/?scene=cars` | Simulated LiDAR — ray-cast against boxes |
+| `/?scene=real` | Real PandaSet scan |
+
+All three are drag-to-rotate and hold still under `prefers-reduced-motion`.
+
+`npm run test:arm` drives the arm through four full pick cycles and asserts it
+never self-collides, never drops a link below the bench, and never leaves a
+joint limit — plus that the guard rejects two deliberately bad poses, so a pass
+can't be vacuous.
 
 ## Known gaps
 

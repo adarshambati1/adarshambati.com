@@ -10,7 +10,9 @@
     "icons": "node scripts/make-icons.mjs",
     "preview": "node --env-file-if-exists=.env node_modules/astro/bin/astro.mjs preview",
     "verify": "astro check && astro build && node scripts/test-arm-safety.mjs",
-    "test:arm": "node scripts/test-arm-safety.mjs"
+    "test:arm": "node scripts/test-arm-safety.mjs",
+    "lidar:fetch": "node scripts/fetch-pandaset-frame.mjs",
+    "lidar:bake": "python3 scripts/bake-pandaset-frame.py"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.5",

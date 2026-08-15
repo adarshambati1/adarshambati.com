@@ -17,7 +17,7 @@
  */
 interface Props {
   /** Pin a scene instead of choosing at random. */
-  mode?: 'auto' | 'cars' | 'arm';
+  mode?: 'auto' | 'cars' | 'arm' | 'real';
 }
 
 const { mode = 'auto' } = Astro.props;
@@ -328,8 +328,64 @@ const { mode = 'auto' } = Astro.props;
 
   let CLOUD: Cloud | null = null;
 
-  function drawCars(ctx: CanvasRenderingContext2D, w: number, h: number, cam: Cam): void {
-    const cloud = CLOUD!;
+  /**
+   * Loads the real PandaSet frame baked by scripts/bake-pandaset-frame.py.
+   *
+   * Streamed as a binary rather than inlined, so the JS bundle stays small and
+   * the scene can draw its grid while the points are still arriving.
+   *
+   * Layout: "LIDR", uint32 count, 3 floats origin, 3 floats scale, then
+   * count*3 uint16 quantised xyz, then count uint8 intensity.
+   */
+  async function loadRealFrame(): Promise<Cloud | null> {
+    try {
+      const res = await fetch('/data/lidar-frame.bin');
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      const view = new DataView(buf);
+      if (String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'LIDR') {
+        return null;
+      }
+      const count = view.getUint32(4, true);
+      const lo = [view.getFloat32(8, true), view.getFloat32(12, true), view.getFloat32(16, true)];
+      const sc = [view.getFloat32(20, true), view.getFloat32(24, true), view.getFloat32(28, true)];
+
+      const qOffset = 32;
+      const q = new Uint16Array(buf, qOffset, count * 3);
+      const inten = new Uint8Array(buf, qOffset + count * 6, count);
+
+      const xyz = new Float32Array(count * 3);
+      const rgb = new Uint8Array(count * 3);
+      const kind = new Uint8Array(count);
+
+      for (let i = 0; i < count; i++) {
+        const x = lo[0]! + (q[i * 3] ?? 0) * sc[0]!;
+        const y = lo[1]! + (q[i * 3 + 1] ?? 0) * sc[1]!;
+        const z = lo[2]! + (q[i * 3 + 2] ?? 0) * sc[2]!;
+        xyz[i * 3] = x;
+        xyz[i * 3 + 1] = y;
+        xyz[i * 3 + 2] = z;
+
+        // Height ramp, brightened by return intensity — real scans carry it and
+        // it's what separates road paint, plates and glass from everything else.
+        const [r, g, b] = ramp((z + 2.2) / 5.2);
+        const lift = 0.72 + ((inten[i] ?? 0) / 255) * 0.75;
+        rgb[i * 3] = Math.min(255, Math.round(r * lift));
+        rgb[i * 3 + 1] = Math.min(255, Math.round(g * lift));
+        rgb[i * 3 + 2] = Math.min(255, Math.round(b * lift));
+        // Anything standing above the road reads as an object.
+        kind[i] = z > -0.7 ? 1 : 0;
+      }
+      return { xyz, rgb, kind, count };
+    } catch {
+      return null;
+    }
+  }
+
+
+  function drawCloud(ctx: CanvasRenderingContext2D, w: number, h: number, cam: Cam): void {
+    const cloud = CLOUD;
+    if (!cloud) return;
 
     // Ground grid under the points, for scale.
     ctx.strokeStyle = 'rgba(120,150,215,0.075)';
@@ -636,14 +692,22 @@ const { mode = 'auto' } = Astro.props;
     // link to or screenshot a specific one. Otherwise it's a coin flip.
     const override = new URLSearchParams(location.search).get('scene');
     const requested = override ?? canvas.dataset.mode;
-    const mode: 'cars' | 'arm' =
-      requested === 'cars' || requested === 'arm'
+    const mode: 'cars' | 'arm' | 'real' =
+      requested === 'cars' || requested === 'arm' || requested === 'real'
         ? requested
         : Math.random() < 0.5
           ? 'cars'
           : 'arm';
 
     if (mode === 'cars') CLOUD = scanStreet();
+    if (mode === 'real') {
+      // Async: the grid draws immediately, points appear when they land.
+      void loadRealFrame().then((cloud) => {
+        CLOUD = cloud;
+        stat('b', 'Points', (cloud?.count ?? 0).toLocaleString('en-GB'));
+        stat('c', 'Source', cloud ? 'PandaSet' : 'unavailable');
+      });
+    }
 
     const stat = (slot: string, label: string, value: string): void => {
       const dt = root?.querySelector<HTMLElement>(`[data-label="${slot}"]`);
@@ -653,17 +717,21 @@ const { mode = 'auto' } = Astro.props;
     };
 
     if (mode === 'cars') {
-      stat('a', 'Source', 'LiDAR');
+      stat('a', 'Source', 'Simulated');
       stat('b', 'Points', (CLOUD?.count ?? 0).toLocaleString('en-GB'));
       stat('c', 'Range', `${MAX_RANGE} m`);
+    } else if (mode === 'real') {
+      stat('a', 'Scan', 'Pandar64');
+      stat('b', 'Points', 'loading…');
+      stat('c', 'Source', 'PandaSet');
     } else {
       stat('a', 'Model', MODEL_NAME);
       stat('b', 'Tris', TRIANGLES.toLocaleString('en-GB'));
       stat('c', 'Solver', 'CCD IK');
     }
 
-    let az = mode === 'cars' ? -0.62 : -0.75;
-    let el = mode === 'cars' ? 0.44 : 0.3;
+    let az = mode === 'arm' ? -0.75 : -0.62;
+    let el = mode === 'arm' ? 0.3 : mode === 'real' ? 0.5 : 0.44;
     let t = 0;
     let raf = 0;
     let w = 0;
@@ -683,11 +751,11 @@ const { mode = 'auto' } = Astro.props;
     function camera(): Cam {
       // Composed right of centre so the scene doesn't sit under the headline.
       const wide = w > 900;
-      return mode === 'cars'
+      return mode !== 'arm'
         ? {
             az,
             el,
-            zoom: Math.min(w, h) / 15,
+            zoom: Math.min(w, h) / (mode === 'real' ? 34 : 15),
             cx: wide ? w * 0.66 : w * 0.5,
             cy: h * 0.58,
             persp: 0.014,
@@ -707,8 +775,8 @@ const { mode = 'auto' } = Astro.props;
       ctx.fillStyle = '#080a10';
       ctx.fillRect(0, 0, w, h);
       const cam = camera();
-      if (mode === 'cars') {
-        drawCars(ctx, w, h, cam);
+      if (mode !== 'arm') {
+        drawCloud(ctx, w, h, cam);
       } else {
         armIK(angles, armScene(t).target, reduced ? 40 : 3);
         drawArm(ctx, cam, angles, armScene(t));
@@ -757,7 +825,7 @@ const { mode = 'auto' } = Astro.props;
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
       t += dt;
-      if (!dragging) az -= dt * (mode === 'cars' ? 0.05 : 0.07);
+
       render();
       raf = requestAnimationFrame(loop);
     };
