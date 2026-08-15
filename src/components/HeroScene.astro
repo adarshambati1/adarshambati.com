@@ -403,7 +403,9 @@ const { mode = 'auto' } = Astro.props;
       ctx.fill();
     };
     shadow(pose.tcp, 20, 0.3);
-    shadow(state.grape, 9, 0.45);
+    // Same position the grape is actually drawn at, or its shadow drifts free
+    // of it while the tool is trailing its setpoint.
+    shadow(state.holding ? pose.tcp : state.grape, 9, 0.45);
 
     const facets: Facet[] = [];
 
@@ -511,7 +513,12 @@ const { mode = 'auto' } = Astro.props;
       ctx.stroke();
     }
 
-    const g = project(state.grape, cam);
+    // While held, the grape rides the actual tool, not the commanded target.
+    // The controller trails its setpoint during fast moves — that lag is what
+    // makes the motion look weighted — so drawing the grape at the target
+    // leaves it floating off the gripper.
+    const grapeWorld: Vec3 = state.holding ? pose.tcp : state.grape;
+    const g = project(grapeWorld, cam);
     const r = Math.max(2.5, GRAPE_R * cam.zoom * g.k);
     const grad = ctx.createRadialGradient(g.x - r * 0.35, g.y - r * 0.4, r * 0.1, g.x, g.y, r * 1.15);
     grad.addColorStop(0, '#a86ec8');
