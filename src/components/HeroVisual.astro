@@ -1,0 +1,738 @@
+---
+/**
+ * The hero graphic. On each visit it picks one of two scenes, 50/50:
+ *
+ *   arm   — a 7-DOF Kinova-style manipulator reaching for a grape. Real
+ *           forward kinematics, and CCD inverse kinematics driving the gripper
+ *           onto the target, so the pose is solved rather than keyframed.
+ *   lidar — a 2D scan ray-cast against a room of wall segments.
+ *
+ * Both are drag-to-rotate. The choice happens client-side so a prerendered page
+ * still varies per visit.
+ *
+ * Honours prefers-reduced-motion: the scene renders, but holds still.
+ */
+interface Props {
+  size?: number;
+}
+
+const { size = 260 } = Astro.props;
+---
+
+<div class="visual" style={`--visual-size:${size}px`}>
+  <canvas
+    class="visual__canvas"
+    data-hero-visual
+    width={size}
+    height={size}
+    role="img"
+    aria-label="Interactive robotics visualisation. Drag to rotate."></canvas>
+  <span class="visual__hint" aria-hidden="true">drag to rotate</span>
+</div>
+
+<style>
+  .visual {
+    position: relative;
+    flex: none;
+    width: var(--visual-size);
+    height: var(--visual-size);
+    padding: 3px;
+    border-radius: 50%;
+    background: linear-gradient(140deg, var(--color-accent), #7c5cf0 55%, #d06bb0);
+  }
+
+  .visual__canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: #0b0d12;
+    cursor: grab;
+    touch-action: none; /* the canvas owns the drag gesture */
+  }
+
+  .visual__canvas:active {
+    cursor: grabbing;
+  }
+
+  .visual__hint {
+    position: absolute;
+    left: 50%;
+    bottom: -1.5rem;
+    transform: translateX(-50%);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+
+  .visual:hover .visual__hint {
+    opacity: 1;
+  }
+
+  @media (max-width: 46rem) {
+    .visual {
+      --visual-size: 150px;
+    }
+    .visual__hint {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  type Vec3 = [number, number, number];
+  type Mat3 = number[]; // row-major, length 9
+
+  /* ---------------------------------------------------------------- math -- */
+
+  const IDENTITY: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+  function mul(a: Mat3, b: Mat3): Mat3 {
+    const out = new Array<number>(9).fill(0);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        out[r * 3 + c] =
+          (a[r * 3] ?? 0) * (b[c] ?? 0) +
+          (a[r * 3 + 1] ?? 0) * (b[3 + c] ?? 0) +
+          (a[r * 3 + 2] ?? 0) * (b[6 + c] ?? 0);
+      }
+    }
+    return out;
+  }
+
+  const apply = (m: Mat3, v: Vec3): Vec3 => [
+    (m[0] ?? 0) * v[0] + (m[1] ?? 0) * v[1] + (m[2] ?? 0) * v[2],
+    (m[3] ?? 0) * v[0] + (m[4] ?? 0) * v[1] + (m[5] ?? 0) * v[2],
+    (m[6] ?? 0) * v[0] + (m[7] ?? 0) * v[1] + (m[8] ?? 0) * v[2],
+  ];
+
+  const rotZ = (t: number): Mat3 => {
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    return [c, -s, 0, s, c, 0, 0, 0, 1];
+  };
+
+  const rotY = (t: number): Mat3 => {
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    return [c, 0, s, 0, 1, 0, -s, 0, c];
+  };
+
+  const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a: Vec3, b: Vec3): Vec3 => [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+  const len = (a: Vec3): number => Math.hypot(a[0], a[1], a[2]);
+
+  function norm(a: Vec3): Vec3 {
+    const l = len(a);
+    return l < 1e-9 ? [0, 0, 0] : [a[0] / l, a[1] / l, a[2] / l];
+  }
+
+  const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+  const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
+  /** Smoothstep, so approaches ease in and out instead of starting abruptly. */
+  const ease = (t: number): number => t * t * (3 - 2 * t);
+
+  /* ----------------------------------------------------------- kinematics -- */
+
+  /** Kinova Gen3 style 7-DOF chain. Proportions, not the exact DH table. */
+  const LINKS: readonly number[] = [0.16, 0.13, 0.22, 0.2, 0.18, 0.1, 0.09];
+  const AXES: readonly ('z' | 'y')[] = ['z', 'y', 'z', 'y', 'z', 'y', 'z'];
+  const LIMITS: readonly [number, number][] = [
+    [-Math.PI, Math.PI],
+    [-2.2, 2.2],
+    [-Math.PI, Math.PI],
+    [-2.5, 2.5],
+    [-Math.PI, Math.PI],
+    [-2.2, 2.2],
+    [-Math.PI, Math.PI],
+  ];
+
+  interface Joint {
+    /** World position of the joint. */
+    p: Vec3;
+    /** World rotation axis of the joint, before its own rotation is applied. */
+    axis: Vec3;
+  }
+
+  interface Pose {
+    joints: Joint[];
+    /** World position of each link end, joints.length + 1 entries. */
+    points: Vec3[];
+    ee: Vec3;
+  }
+
+  function forward(angles: readonly number[]): Pose {
+    let R: Mat3 = IDENTITY;
+    let p: Vec3 = [0, 0, 0];
+    const joints: Joint[] = [];
+    const points: Vec3[] = [p];
+
+    for (let i = 0; i < LINKS.length; i++) {
+      const local: Vec3 = AXES[i] === 'z' ? [0, 0, 1] : [0, 1, 0];
+      joints.push({ p, axis: norm(apply(R, local)) });
+
+      R = mul(R, AXES[i] === 'z' ? rotZ(angles[i] ?? 0) : rotY(angles[i] ?? 0));
+      const step = apply(R, [0, 0, LINKS[i] ?? 0]);
+      p = [p[0] + step[0], p[1] + step[1], p[2] + step[2]];
+      points.push(p);
+    }
+
+    return { joints, points, ee: p };
+  }
+
+  /**
+   * Cyclic coordinate descent.
+   *
+   * Walks the chain from the wrist inward; for each joint, rotates about that
+   * joint's own axis by the angle that best brings the end effector toward the
+   * target. Each joint only moves within its limits, and each step is capped,
+   * so the arm settles smoothly instead of snapping into pose.
+   */
+  function solveIK(angles: number[], target: Vec3, iterations = 6): void {
+    for (let pass = 0; pass < iterations; pass++) {
+      for (let i = LINKS.length - 1; i >= 0; i--) {
+        const { joints, ee } = forward(angles);
+        const joint = joints[i];
+        if (!joint) continue;
+
+        const toEE = sub(ee, joint.p);
+        const toTarget = sub(target, joint.p);
+        const axis = joint.axis;
+
+        // Work in the plane perpendicular to this joint's axis — rotation
+        // about the axis can't move anything out of it.
+        const flatten = (v: Vec3): Vec3 => {
+          const k = dot(v, axis);
+          return [v[0] - axis[0] * k, v[1] - axis[1] * k, v[2] - axis[2] * k];
+        };
+
+        const a = norm(flatten(toEE));
+        const b = norm(flatten(toTarget));
+        if (len(a) < 1e-6 || len(b) < 1e-6) continue;
+
+        const signed = Math.atan2(dot(cross(a, b), axis), clamp(dot(a, b), -1, 1));
+        const limit = LIMITS[i] ?? [-Math.PI, Math.PI];
+        angles[i] = clamp((angles[i] ?? 0) + clamp(signed, -0.25, 0.25), limit[0], limit[1]);
+      }
+    }
+  }
+
+  /* --------------------------------------------------------------- scene -- */
+
+  const REST: readonly number[] = [0.35, 0.75, 0, -1.1, 0, 0.7, 0];
+  const GRAPE_R = 0.032;
+  /** Where grapes appear. Cycled through so the reach varies. */
+  const SPOTS: readonly Vec3[] = [
+    [0.34, 0.22, GRAPE_R],
+    [-0.3, 0.3, GRAPE_R],
+    [0.12, 0.42, GRAPE_R],
+    [0.42, -0.16, GRAPE_R],
+  ];
+
+  const CYCLE = 7.2; // seconds for reach → grip → lift → place → reset
+
+  interface SceneState {
+    target: Vec3;
+    grape: Vec3;
+    grip: number; // 0 open, 1 closed
+    holding: boolean;
+  }
+
+  /** Where the arm should be pointing, and where the grape is, at time t. */
+  function scene(t: number): SceneState {
+    const cycle = Math.floor(t / CYCLE);
+    const u = (t % CYCLE) / CYCLE;
+    const spot = SPOTS[cycle % SPOTS.length] ?? SPOTS[0]!;
+    const drop: Vec3 = [-0.18, -0.3, GRAPE_R];
+
+    // Standby pose the arm returns to between picks.
+    const home: Vec3 = [0.1, 0.05, 0.5];
+    // Approach from directly above so the gripper descends onto the grape.
+    const above: Vec3 = [spot[0], spot[1], spot[2] + 0.16];
+
+    const between = (a: Vec3, b: Vec3, k: number): Vec3 => [
+      lerp(a[0], b[0], k),
+      lerp(a[1], b[1], k),
+      lerp(a[2], b[2], k),
+    ];
+
+    if (u < 0.26) {
+      // Travel to a point above the grape.
+      return { target: between(home, above, ease(u / 0.26)), grape: spot, grip: 0, holding: false };
+    }
+    if (u < 0.4) {
+      // Descend onto it.
+      return {
+        target: between(above, spot, ease((u - 0.26) / 0.14)),
+        grape: spot,
+        grip: 0,
+        holding: false,
+      };
+    }
+    if (u < 0.48) {
+      // Close.
+      return { target: spot, grape: spot, grip: ease((u - 0.4) / 0.08), holding: false };
+    }
+    if (u < 0.68) {
+      // Lift, grape comes with it.
+      const k = ease((u - 0.48) / 0.2);
+      const lifted = between(spot, above, k);
+      return { target: lifted, grape: lifted, grip: 1, holding: true };
+    }
+    if (u < 0.86) {
+      // Carry to the drop point.
+      const k = ease((u - 0.68) / 0.18);
+      const carried = between(above, [drop[0], drop[1], drop[2] + 0.02], k);
+      return { target: carried, grape: carried, grip: 1, holding: true };
+    }
+    // Release and go home.
+    const k = ease((u - 0.86) / 0.14);
+    return {
+      target: between([drop[0], drop[1], drop[2] + 0.02], home, k),
+      grape: drop,
+      grip: 1 - k,
+      holding: false,
+    };
+  }
+
+  /* ------------------------------------------------------------- camera -- */
+
+  interface Screen {
+    x: number;
+    y: number;
+    depth: number;
+    scale: number;
+  }
+
+  function project(p: Vec3, az: number, el: number, zoom: number, cx: number, cy: number): Screen {
+    const ca = Math.cos(az);
+    const sa = Math.sin(az);
+    const x1 = p[0] * ca - p[1] * sa;
+    const y1 = p[0] * sa + p[1] * ca;
+    const ce = Math.cos(el);
+    const se = Math.sin(el);
+    const height = p[2] * ce - y1 * se;
+    const depth = y1 * ce + p[2] * se;
+    const k = 1 / (1 + depth * 0.16); // weak perspective
+    return { x: cx + x1 * zoom * k, y: cy - height * zoom * k, depth, scale: k };
+  }
+
+  /* ---------------------------------------------------------------- draw -- */
+
+  /** A link drawn as a shaded tube: dark casing, lit core, highlight edge. */
+  function tube(
+    ctx: CanvasRenderingContext2D,
+    a: Screen,
+    b: Screen,
+    width: number,
+    tint: number,
+  ): void {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const l = Math.hypot(dx, dy) || 1;
+    // Gradient across the tube, not along it — that's what reads as round.
+    const nx = (-dy / l) * width * 0.5;
+    const ny = (dx / l) * width * 0.5;
+    const grad = ctx.createLinearGradient(a.x + nx, a.y + ny, a.x - nx, a.y - ny);
+    const base = 150 + tint;
+    grad.addColorStop(0, `rgb(${base + 70},${base + 76},${base + 88})`);
+    grad.addColorStop(0.45, `rgb(${base},${base + 8},${base + 22})`);
+    grad.addColorStop(1, `rgb(${base - 78},${base - 74},${base - 62})`);
+
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(10,13,20,0.9)';
+    ctx.lineWidth = width + 2.5;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  function drawGrape(ctx: CanvasRenderingContext2D, s: Screen, r: number): void {
+    const grad = ctx.createRadialGradient(
+      s.x - r * 0.35,
+      s.y - r * 0.4,
+      r * 0.1,
+      s.x,
+      s.y,
+      r * 1.15,
+    );
+    grad.addColorStop(0, '#a86ec8');
+    grad.addColorStop(0.5, '#6f3f9e');
+    grad.addColorStop(1, '#3b1f5c');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Specular dot — small, offset, and the thing that makes it read as fruit.
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath();
+    ctx.ellipse(s.x - r * 0.34, s.y - r * 0.42, r * 0.2, r * 0.14, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawArm(
+    ctx: CanvasRenderingContext2D,
+    css: number,
+    angles: readonly number[],
+    state: SceneState,
+    az: number,
+    el: number,
+  ): void {
+    const cx = css / 2;
+    const cy = css / 2 + css * 0.15;
+    const zoom = css * 0.66;
+    const { points } = forward(angles);
+
+    // Ground grid.
+    ctx.lineWidth = 1;
+    const half = 0.55;
+    const step = 0.1375;
+    for (let i = -4; i <= 4; i++) {
+      const u = i * step;
+      ctx.strokeStyle = Math.abs(i) === 4 ? 'rgba(120,150,220,0.2)' : 'rgba(120,150,220,0.085)';
+      const a1 = project([u, -half, 0], az, el, zoom, cx, cy);
+      const a2 = project([u, half, 0], az, el, zoom, cx, cy);
+      const b1 = project([-half, u, 0], az, el, zoom, cx, cy);
+      const b2 = project([half, u, 0], az, el, zoom, cx, cy);
+      ctx.beginPath();
+      ctx.moveTo(a1.x, a1.y);
+      ctx.lineTo(a2.x, a2.y);
+      ctx.moveTo(b1.x, b1.y);
+      ctx.lineTo(b2.x, b2.y);
+      ctx.stroke();
+    }
+
+    // Shadows first, on the ground plane.
+    const shadow = (world: Vec3, radius: number, alpha: number): void => {
+      const s = project([world[0], world[1], 0], az, el, zoom, cx, cy);
+      const fade = clamp(1 - world[2] * 0.9, 0.25, 1);
+      ctx.fillStyle = `rgba(0,0,0,${(alpha * fade).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, radius * s.scale * fade, radius * s.scale * fade * 0.34, 0, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const ee = points[points.length - 1];
+    if (ee) shadow(ee, 14, 0.35);
+    shadow(state.grape, 7, 0.45);
+
+    // Base plinth.
+    const base = project([0, 0, 0], az, el, zoom, cx, cy);
+    ctx.fillStyle = 'rgba(120,132,156,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(base.x, base.y, 18 * base.scale, 7 * base.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Collect drawables so the grape sorts correctly against the arm.
+    const screens = points.map((p) => project(p, az, el, zoom, cx, cy));
+    const grapeScreen = project(state.grape, az, el, zoom, cx, cy);
+
+    interface Item {
+      depth: number;
+      paint: () => void;
+    }
+    const items: Item[] = [];
+
+    for (let i = 0; i < screens.length - 1; i++) {
+      const a = screens[i];
+      const b = screens[i + 1];
+      if (!a || !b) continue;
+      const k = (a.scale + b.scale) / 2;
+      const width = (13 - i * 1.0) * k;
+      items.push({
+        depth: (a.depth + b.depth) / 2,
+        paint: () => {
+          tube(ctx, a, b, width, -i * 6);
+          // Joint puck.
+          ctx.fillStyle = 'rgba(96,140,240,0.95)';
+          ctx.beginPath();
+          ctx.arc(a.x, a.y, Math.max(1.7, width * 0.3), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(10,13,20,0.6)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        },
+      });
+    }
+
+    // Gripper fingers, opening and closing with state.grip.
+    const wrist = screens[screens.length - 2];
+    const tip = screens[screens.length - 1];
+    if (wrist && tip) {
+      items.push({
+        depth: tip.depth,
+        paint: () => {
+          const dx = tip.x - wrist.x;
+          const dy = tip.y - wrist.y;
+          const l = Math.hypot(dx, dy) || 1;
+          const px = -dy / l;
+          const py = dx / l;
+          const spread = (1 - state.grip) * 6.5 * tip.scale + 2.4 * tip.scale;
+          const fingerLen = 8 * tip.scale;
+
+          ctx.strokeStyle = 'rgba(226,232,246,0.95)';
+          ctx.lineWidth = Math.max(1.4, 3 * tip.scale);
+          ctx.lineCap = 'round';
+          for (const sign of [1, -1]) {
+            ctx.beginPath();
+            ctx.moveTo(tip.x + px * spread * sign, tip.y + py * spread * sign);
+            ctx.lineTo(
+              tip.x + px * spread * sign + (dx / l) * fingerLen,
+              tip.y + py * spread * sign + (dy / l) * fingerLen,
+            );
+            ctx.stroke();
+          }
+        },
+      });
+    }
+
+    items.push({
+      depth: grapeScreen.depth,
+      paint: () => drawGrape(ctx, grapeScreen, Math.max(2.5, GRAPE_R * zoom * grapeScreen.scale)),
+    });
+
+    // Painter's algorithm: far to near.
+    items.sort((a, b) => b.depth - a.depth);
+    for (const item of items) item.paint();
+  }
+
+  /* -------------------------------------------------------------- lidar -- */
+
+  interface Wall {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  }
+
+  const SCENE: readonly Wall[] = [
+    { x1: -0.92, y1: -0.72, x2: 0.24, y2: -0.72 },
+    { x1: 0.52, y1: -0.72, x2: 0.92, y2: -0.72 },
+    { x1: 0.92, y1: -0.72, x2: 0.92, y2: 0.3 },
+    { x1: 0.92, y1: 0.58, x2: 0.92, y2: 0.92 },
+    { x1: 0.92, y1: 0.92, x2: -0.92, y2: 0.92 },
+    { x1: -0.92, y1: 0.92, x2: -0.92, y2: -0.72 },
+    { x1: -0.55, y1: 0.1, x2: -0.2, y2: 0.1 },
+    { x1: -0.2, y1: 0.1, x2: -0.2, y2: 0.42 },
+    { x1: -0.2, y1: 0.42, x2: -0.55, y2: 0.42 },
+    { x1: -0.55, y1: 0.42, x2: -0.55, y2: 0.1 },
+    { x1: 0.34, y1: -0.34, x2: 0.66, y2: -0.12 },
+    { x1: 0.2, y1: 0.44, x2: 0.62, y2: 0.44 },
+  ];
+
+  const RAYS = 900;
+  const MAX_RANGE = 1.32;
+  const TRAIL = 0.55;
+
+  function cast(angle: number): number {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    let best = MAX_RANGE;
+    for (const s of SCENE) {
+      const ex = s.x2 - s.x1;
+      const ey = s.y2 - s.y1;
+      const denom = dx * ey - dy * ex;
+      if (Math.abs(denom) < 1e-9) continue;
+      const t = (s.x1 * ey - s.y1 * ex) / denom;
+      const u = (s.x1 * dy - s.y1 * dx) / denom;
+      if (t > 0 && t < best && u >= 0 && u <= 1) best = t;
+    }
+    return best;
+  }
+
+  const RANGES: readonly number[] = Array.from({ length: RAYS }, (_, i) =>
+    cast((i / RAYS) * Math.PI * 2),
+  );
+
+  function drawLidar(
+    ctx: CanvasRenderingContext2D,
+    css: number,
+    sweep: number,
+    az: number,
+    reduced: boolean,
+  ): void {
+    const c = css / 2;
+    const zoom = c / (MAX_RANGE * 1.06);
+
+    ctx.strokeStyle = 'rgba(120,150,220,0.13)';
+    ctx.lineWidth = 1;
+    for (let r = 0.33; r <= MAX_RANGE; r += 0.33) {
+      ctx.beginPath();
+      ctx.arc(c, c, r * zoom, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.moveTo(c - MAX_RANGE * zoom, c);
+    ctx.lineTo(c + MAX_RANGE * zoom, c);
+    ctx.moveTo(c, c - MAX_RANGE * zoom);
+    ctx.lineTo(c, c + MAX_RANGE * zoom);
+    ctx.stroke();
+
+    for (let i = 0; i < RAYS; i++) {
+      const a = (i / RAYS) * Math.PI * 2;
+      const range = RANGES[i];
+      if (range === undefined || range >= MAX_RANGE) continue;
+
+      let alpha = 0.5;
+      if (!reduced) {
+        let age = (sweep - a) / (Math.PI * 2);
+        age -= Math.floor(age);
+        if (age > TRAIL) continue;
+        alpha = 1 - age / TRAIL;
+      }
+
+      const world = a + az; // drag rotates the whole cloud
+      const x = c + Math.cos(world) * range * zoom;
+      const y = c + Math.sin(world) * range * zoom;
+      const hot = alpha * alpha;
+      ctx.fillStyle = `rgba(${Math.round(120 + 100 * hot)},${Math.round(170 + 60 * hot)},255,${(0.16 + 0.8 * alpha).toFixed(3)})`;
+      ctx.fillRect(x - 1, y - 1, 2 + hot, 2 + hot);
+    }
+
+    if (!reduced) {
+      ctx.strokeStyle = 'rgba(150,190,255,0.5)';
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      ctx.moveTo(c, c);
+      ctx.lineTo(
+        c + Math.cos(sweep + az) * MAX_RANGE * zoom,
+        c + Math.sin(sweep + az) * MAX_RANGE * zoom,
+      );
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = 'rgba(200,220,255,0.95)';
+    ctx.beginPath();
+    ctx.arc(c, c, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /* ------------------------------------------------------------- driver -- */
+
+  function start(canvas: HTMLCanvasElement): void {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mode: 'arm' | 'lidar' = Math.random() < 0.5 ? 'arm' : 'lidar';
+    canvas.setAttribute(
+      'aria-label',
+      mode === 'arm'
+        ? 'Simulated 7-DOF robot arm picking a grape. Drag to rotate.'
+        : 'LiDAR point cloud. Drag to rotate.',
+    );
+
+    let az = mode === 'arm' ? -0.75 : 0;
+    let el = 0.4;
+    let t = 0;
+    let raf = 0;
+    const angles: number[] = [...REST];
+
+    const resize = (): void => {
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const css = canvas.clientWidth || 260;
+      canvas.width = Math.round(css * dpr);
+      canvas.height = Math.round(css * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    const render = (): void => {
+      const css = canvas.clientWidth || 260;
+      ctx.clearRect(0, 0, css, css);
+      ctx.fillStyle = '#0b0d12';
+      ctx.fillRect(0, 0, css, css);
+      if (mode === 'arm') {
+        const state = scene(t);
+        solveIK(angles, state.target, reduced ? 24 : 3);
+        drawArm(ctx, css, angles, state, az, el);
+      } else {
+        drawLidar(ctx, css, t * 1.15, az, reduced);
+      }
+    };
+
+    // --- drag to rotate -----------------------------------------------------
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.addEventListener('pointerdown', (e: PointerEvent) => {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (e: PointerEvent) => {
+      if (!dragging) return;
+      az -= (e.clientX - lastX) * 0.01;
+      // Clamp elevation so the camera can't tumble past the poles.
+      el = clamp(el + (e.clientY - lastY) * 0.006, -0.2, 1.25);
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (reduced) render();
+    });
+
+    const endDrag = (e: PointerEvent): void => {
+      dragging = false;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+
+    resize();
+    addEventListener(
+      'resize',
+      () => {
+        resize();
+        render();
+      },
+      { passive: true },
+    );
+
+    if (reduced) {
+      t = CYCLE * 0.42; // mid-grasp, held still
+      render();
+      return;
+    }
+
+    let last = performance.now();
+    const loop = (now: number): void => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      t += dt;
+      if (!dragging && mode === 'arm') az -= dt * 0.07; // slow idle orbit
+      render();
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    // Stop burning frames once the hero scrolls out of view.
+    new IntersectionObserver((entries) => {
+      const visible = entries[0]?.isIntersecting ?? false;
+      if (visible && !raf) {
+        last = performance.now();
+        raf = requestAnimationFrame(loop);
+      } else if (!visible && raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    }).observe(canvas);
+  }
+
+  document.querySelectorAll<HTMLCanvasElement>('canvas[data-hero-visual]').forEach(start);
+</script>

@@ -4,6 +4,7 @@ import type { GetStaticPaths } from 'astro';
 import Base from '../../layouts/Base.astro';
 import Prose from '../../components/Prose.astro';
 import Footer from '../../components/Footer.astro';
+import { getProfile, navActions, projectImage } from '../../lib/site';
 
 export const prerender = true;
 
@@ -30,16 +31,21 @@ const { Content } = await render(entry);
 const { title, period, summary, href } = entry.data;
 
 const sourceLabel: string | null = href ? new URL(href).hostname.replace(/^www\./, '') : null;
+
+const profile = await getProfile();
+const cover: string = projectImage(entry);
 ---
 
-<Base title={`${title} — Adarsh Ambati`} description={summary}>
+<Base title={`${title} — Adarsh Ambati`} description={summary} navActions={navActions(profile)}>
   <article>
     <header class="head">
-      <p class="head__back"><a href="/">&larr; Back</a></p>
+      <p class="head__back"><a href="/projects">&larr; All projects</a></p>
       <h1>{title}</h1>
       <p class="head__period u-subtle u-mono-nums">{period}</p>
       <p class="head__summary">{summary}</p>
     </header>
+
+    <img class="cover" src={cover} alt="" width="1200" height="750" />
 
     <Prose><Content /></Prose>
 
@@ -63,8 +69,18 @@ const sourceLabel: string | null = href ? new URL(href).hostname.replace(/^www\.
   }
 
   .head__back {
+    padding-top: var(--space-6);
     margin-bottom: var(--space-6);
     font-size: var(--text-sm);
+  }
+
+  .cover {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-7);
   }
 
   .head__period {

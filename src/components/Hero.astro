@@ -1,110 +1,167 @@
 ---
-/** Top of the homepage: who you are, where you work, and the intro prose. */
-interface Props {
-  name: string;
-  tagline: string;
-  portrait?: string;
-  current?: {
-    role: string;
-    org: string;
-    href?: string | undefined;
-  };
+/**
+ * Landing hero: eyebrow, name at display size, and a run-on credential line.
+ *
+ * The credential line is the load-bearing part — a sequence of short clauses
+ * where the notable ones are links in the accent colour. It communicates the
+ * whole CV in one paragraph, before anyone scrolls.
+ */
+import HeroVisual from './HeroVisual.astro';
+
+export interface Credential {
+  readonly text: string;
+  readonly href?: string | undefined;
 }
 
-const { name, tagline, portrait, current } = Astro.props;
+interface Props {
+  name: string;
+  eyebrow?: string;
+  tagline: string;
+  portrait?: string;
+  credentials?: readonly Credential[];
+}
+
+const { name, eyebrow = '', tagline, portrait = '', credentials = [] } = Astro.props;
 ---
 
 <section class="hero">
-  {
-    portrait && (
-      <img class="hero__portrait" src={`/${portrait}`} alt="" width="88" height="88" loading="eager" />
-    )
-  }
+  <div class="hero__text">
+    {eyebrow && <p class="hero__eyebrow">{eyebrow}</p>}
 
-  <div class="hero__body">
     <h1 class="hero__name">{name}</h1>
 
     {
-      /* Directly under the name, at full text colour. This is the credibility
-         line — as muted metadata below the tagline it read as an afterthought. */
-      current && (
-        <p class="hero__current">
-          {current.role} at{' '}
-          {current.href ? (
-            <a class="hero__org" href={current.href}>
-              {current.org}
-            </a>
-          ) : (
-            <span>{current.org}</span>
-          )}
+      credentials.length > 0 ? (
+        <p class="hero__creds">
+          {credentials.map((c) => (
+            <>
+              {c.href ? (
+                <a class="hero__cred-link" href={c.href} rel="noopener">
+                  {c.text}
+                </a>
+              ) : (
+                <span class="hero__cred">{c.text}</span>
+              )}{' '}
+            </>
+          ))}
+        </p>
+      ) : (
+        <p class="hero__creds">
+          <span class="hero__cred">{tagline}</span>
         </p>
       )
     }
-
-    <p class="hero__tagline">{tagline}</p>
   </div>
-</section>
 
-<div class="hero__prose">
-  <slot />
-</div>
+  {
+    /* Set `portrait:` in profile.md to swap the scan for a photo. */
+    portrait ? (
+      <div class="hero__frame">
+        <img class="hero__portrait" src={`/${portrait}`} alt={name} width="260" height="260" loading="eager" />
+      </div>
+    ) : (
+      <HeroVisual size={260} />
+    )
+  }
+</section>
 
 <style>
   .hero {
     display: flex;
     align-items: center;
-    gap: var(--space-5);
+    justify-content: space-between;
+    gap: var(--space-7);
+    padding: var(--space-8) 0 var(--space-7);
+  }
+
+  .hero__text {
+    min-width: 0;
+  }
+
+  .hero__eyebrow {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-3);
+  }
+
+  .hero__name {
+    font-size: clamp(2.75rem, 7vw, 4.25rem);
+    font-weight: var(--weight-semibold);
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+  }
+
+  .hero__creds {
+    max-width: 30rem;
+    margin-top: var(--space-4);
+    font-size: var(--text-lg);
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
+  .hero__cred-link {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .hero__cred-link:hover {
+    text-decoration: underline;
+    text-decoration-color: currentColor;
+    text-underline-offset: 0.18em;
+  }
+
+  /* Gradient ring, drawn with a padded background rather than a border so the
+     ring thickness stays even as the image scales. */
+  .hero__frame {
+    flex: none;
+    width: 260px;
+    height: 260px;
+    padding: 3px;
+    border-radius: 50%;
+    background: linear-gradient(140deg, var(--color-accent), #7c5cf0 55%, #d06bb0);
   }
 
   .hero__portrait {
-    flex: none;
-    width: 88px;
-    height: 88px;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     object-fit: cover;
     background: var(--color-surface);
   }
 
-  .hero__name {
-    font-size: var(--text-3xl);
+  .hero__frame--empty {
+    display: grid;
+    place-items: center;
   }
 
-  .hero__current {
-    margin-top: var(--space-2);
-    font-size: var(--text-base);
+  .hero__frame--empty span {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--color-surface);
+    color: var(--color-text-subtle);
+    font-size: 3rem;
     font-weight: var(--weight-medium);
-    color: var(--color-text);
+    letter-spacing: -0.02em;
   }
 
-  .hero__org {
-    color: var(--color-accent);
-    text-decoration-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
-  }
-
-  .hero__tagline {
-    margin-top: var(--space-1);
-    font-size: var(--text-sm);
-    color: var(--color-text-muted);
-  }
-
-  .hero__prose {
-    max-width: var(--width-prose);
-    margin-top: var(--space-6);
-    color: var(--color-text-muted);
-  }
-
-  .hero__prose :global(p + p) {
-    margin-top: var(--space-4);
-  }
-
-  @media (max-width: 30rem) {
+  @media (max-width: 46rem) {
     .hero {
+      flex-direction: column-reverse;
       align-items: flex-start;
-      gap: var(--space-4);
+      gap: var(--space-5);
+      padding-top: var(--space-6);
     }
-    .hero__portrait {
-      width: 64px;
-      height: 64px;
+    .hero__frame,
+    .hero__frame--empty {
+      width: 128px;
+      height: 128px;
+    }
+    .hero__frame--empty span {
+      font-size: 1.75rem;
     }
   }
 </style>

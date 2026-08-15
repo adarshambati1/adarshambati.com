@@ -1,7 +1,7 @@
 ---
 import '../styles/index.css';
 import Nav from '../components/Nav.astro';
-import type { NavLink } from '../components/Nav.astro';
+import type { NavLink, NavAction } from '../components/Nav.astro';
 
 interface Props {
   title: string;
@@ -12,6 +12,7 @@ interface Props {
   /** Header brand text. Omit the nav entirely by passing navLinks: []. */
   brand?: string;
   navLinks?: readonly NavLink[] | undefined;
+  navActions?: readonly NavAction[] | undefined;
 }
 
 const {
@@ -21,6 +22,7 @@ const {
   noindex = false,
   brand = 'Adarsh Ambati',
   navLinks,
+  navActions,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://adarshambati.com');
@@ -60,15 +62,31 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? 'https://adarshambat
     <meta name="theme-color" content="#ffffff" />
   </head>
   <body>
-    <Nav name={brand} {...(navLinks ? { links: navLinks } : {})} />
+    <Nav
+      name={brand}
+      {...(navLinks ? { links: navLinks } : {})}
+      {...(navActions ? { actions: navActions } : {})}
+    />
     <main class="page">
       <slot />
     </main>
-    <script>
-      if ('serviceWorker' in navigator) {
-        addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-      }
-    </script>
+    {
+      /*
+        Only the todo app registers the service worker, and never in dev.
+        It exists so the app works offline; the public site gains nothing from
+        it and, because dev module URLs aren't content-hashed, a cache-first
+        worker there serves stale JS and CSS on every reload.
+      */
+      manifest === 'todo' && import.meta.env.PROD && (
+        <script is:inline>
+          if ('serviceWorker' in navigator) {
+            addEventListener('load', () =>
+              navigator.serviceWorker.register('/sw.js').catch(() => {}),
+            );
+          }
+        </script>
+      )
+    }
   </body>
 </html>
 

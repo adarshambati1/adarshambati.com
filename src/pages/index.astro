@@ -1,73 +1,88 @@
 ---
-import { getCollection, render, type CollectionEntry } from 'astro:content';
+import { render } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import Hero from '../components/Hero.astro';
+import Affiliations from '../components/Affiliations.astro';
 import Section from '../components/Section.astro';
 import Card from '../components/Card.astro';
+import NoteRow from '../components/NoteRow.astro';
 import LinkList from '../components/LinkList.astro';
+import Prose from '../components/Prose.astro';
 import Footer from '../components/Footer.astro';
+import {
+  getProfile,
+  getProjects,
+  getNotes,
+  navActions,
+  projectImage,
+  projectTarget,
+} from '../lib/site';
 
 export const prerender = true;
 
-type Project = CollectionEntry<'projects'>;
-type SectionKey = Project['data']['section'];
-
-const [profile] = await getCollection('profile');
-if (!profile) throw new Error('Missing src/content/site/profile.md');
-
+const profile = await getProfile();
 const { Content } = await render(profile);
-const { name, tagline, description, current, portrait, emails, links } = profile.data;
+const { name, eyebrow, tagline, description, credentials, affiliations, portrait, emails, links } =
+  profile.data;
 
-const projects: Project[] = (await getCollection('projects'))
-  .filter((p) => p.data.published)
-  .sort((a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title));
+const projects = await getProjects();
+const notes = await getNotes();
 
-const SECTIONS: readonly { key: SectionKey; id: string; title: string; note?: string }[] = [
-  { key: 'research', id: 'research', title: 'Research' },
-  { key: 'ventures', id: 'companies', title: 'Companies' },
-  { key: 'earlier', id: 'earlier', title: 'Earlier', note: 'Work from before the robotics turn.' },
-];
-
-/** A project links to its own page when it has a write-up, otherwise outward. */
-function target(p: Project): { href: string | undefined; internal: boolean } {
-  if (p.body?.trim()) return { href: `/projects/${p.id}`, internal: true };
-  return { href: p.data.href, internal: false };
-}
+/* The homepage is a landing page, not an archive — a handful of each, with the
+   full lists a click away. */
+const featured = projects.filter((p) => p.data.featured).slice(0, 3);
+const recentNotes = notes.slice(0, 3);
 ---
 
-<Base title={`${name} — ${tagline}`} description={description}>
+<Base title={`${name} — ${tagline}`} description={description} navActions={navActions(profile)}>
   <Hero
     name={name}
+    eyebrow={eyebrow}
     tagline={tagline}
-    {...(portrait ? { portrait } : {})}
-    {...(current ? { current } : {})}
-  >
-    <Content />
-  </Hero>
+    portrait={portrait}
+    credentials={credentials}
+  />
+
+  <Affiliations items={affiliations} />
+
+  <Section id="about" title="About">
+    <Prose><Content /></Prose>
+  </Section>
 
   {
-    SECTIONS.map(({ key, id, title, note }) => {
-      const items = projects.filter((p) => p.data.section === key);
-      if (items.length === 0) return null;
-      const compact = key === 'earlier';
-      return (
-        <Section id={id} title={title} note={note} quiet={compact}>
-          {items.map((p) => {
-            const { href, internal } = target(p);
-            return (
-              <Card
-                title={p.data.title}
-                period={p.data.period}
-                summary={p.data.summary}
-                href={href}
-                internal={internal}
-                compact={compact}
-              />
-            );
-          })}
-        </Section>
-      );
-    })
+    featured.length > 0 && (
+      <Section id="projects" title="Projects" note="A few things I've built.">
+        {featured.map((p) => {
+          const { href, internal } = projectTarget(p);
+          return (
+            <Card
+              title={p.data.title}
+              period={p.data.period}
+              summary={p.data.summary}
+              href={href}
+              internal={internal}
+              image={projectImage(p)}
+            />
+          );
+        })}
+        <p class="more">
+          <a href="/projects">View all projects &rarr;</a>
+        </p>
+      </Section>
+    )
+  }
+
+  {
+    recentNotes.length > 0 && (
+      <Section id="notes" title="Research notes" note="Notes from what I read.">
+        {recentNotes.map((n) => (
+          <NoteRow entry={n} />
+        ))}
+        <p class="more">
+          <a href="/notes">View all notes &rarr;</a>
+        </p>
+      </Section>
+    )
   }
 
   <Section id="contact" title="Contact">
@@ -76,3 +91,21 @@ function target(p: Project): { href: string | undefined; internal: boolean } {
 
   <Footer name={name} />
 </Base>
+
+<style>
+  .more {
+    margin-top: var(--space-5);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  .more a {
+    text-decoration: none;
+    color: var(--color-accent);
+  }
+
+  .more a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+</style>

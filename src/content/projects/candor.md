@@ -2,6 +2,7 @@
 title: Candor Security
 period: '2024–2025'
 section: ventures
+featured: true
 order: 10
 href: https://candor.security/
 summary: >-

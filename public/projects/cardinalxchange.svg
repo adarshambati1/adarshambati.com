@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 750" width="1200" height="750" role="img" aria-label="">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="hsl(183 32% 94%)"/>
+      <stop offset="1" stop-color="hsl(201 30% 86%)"/>
+    </linearGradient>
+    <clipPath id="c"><rect width="1200" height="750"/></clipPath>
+  </defs>
+  <rect width="1200" height="750" fill="url(#g)"/>
+  <g clip-path="url(#c)"><circle cx="529.6" cy="459.1" r="60.0" fill="none" stroke="hsl(183 34% 42%)" stroke-width="2.39" opacity="0.173"/><circle cx="529.6" cy="459.1" r="139.1" fill="none" stroke="hsl(183 34% 42%)" stroke-width="1.49" opacity="0.119"/><circle cx="529.6" cy="459.1" r="258.5" fill="none" stroke="hsl(183 34% 42%)" stroke-width="1.93" opacity="0.153"/><circle cx="529.6" cy="459.1" r="335.8" fill="none" stroke="hsl(183 34% 42%)" stroke-width="2.13" opacity="0.167"/><circle cx="529.6" cy="459.1" r="314.4" fill="none" stroke="hsl(183 34% 42%)" stroke-width="2.08" opacity="0.130"/><circle cx="529.6" cy="459.1" r="387.1" fill="none" stroke="hsl(183 34% 42%)" stroke-width="1.46" opacity="0.071"/><line x1="252.0" y1="623.3" x2="758.2" y2="616.5" stroke="hsl(183 34% 42%)" stroke-width="1.25" opacity="0.140"/><line x1="562.4" y1="463.8" x2="1422.0" y2="438.1" stroke="hsl(183 34% 42%)" stroke-width="1.25" opacity="0.131"/><line x1="210.2" y1="585.9" x2="587.8" y2="556.6" stroke="hsl(183 34% 42%)" stroke-width="1.25" opacity="0.163"/><circle cx="459.1" cy="441.1" r="3.5" fill="hsl(183 34% 42%)" opacity="0.174"/><circle cx="855.0" cy="687.5" r="2.8" fill="hsl(183 34% 42%)" opacity="0.264"/><circle cx="63.6" cy="360.8" r="4.2" fill="hsl(183 34% 42%)" opacity="0.194"/><circle cx="1058.9" cy="154.6" r="4.8" fill="hsl(183 34% 42%)" opacity="0.246"/><circle cx="660.6" cy="221.4" r="3.7" fill="hsl(183 34% 42%)" opacity="0.185"/></g>
+</svg>

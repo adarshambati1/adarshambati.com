@@ -1,0 +1,59 @@
+---
+/**
+ * Full-bleed strip of affiliations under the hero.
+ *
+ * Wordmarks set in type rather than logo images: the logos are other
+ * organisations' trademarks, they'd need permission and asset files, and a
+ * mismatched row of PNGs at different weights looks worse than clean type.
+ */
+interface Props {
+  items: readonly string[];
+}
+
+const { items } = Astro.props;
+---
+
+{
+  items.length > 0 && (
+    <div class="strip">
+      <ul class="strip__list">
+        {items.map((item) => (
+          <li class="strip__item">{item}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+<style>
+  /* Contained rather than full-bleed: a 100vw breakout overflows by the
+     scrollbar width, and `overflow-x: hidden` on body to compensate would
+     break the sticky header. */
+  .strip {
+    margin: var(--space-6) 0 var(--space-8);
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  /* Wraps rather than scrolls. Five short wordmarks don't justify a scroll
+     container, and centring a too-wide flex row inside one clips the leading
+     items instead of letting you reach them. */
+  .strip__list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-3) var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .strip__item {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0.02em;
+    color: var(--color-text-subtle);
+    white-space: nowrap;
+  }
+</style>

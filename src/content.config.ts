@@ -12,11 +12,23 @@ const profile = defineCollection({
   loader: glob({ pattern: 'profile.md', base: './src/content/site' }),
   schema: z.object({
     name: z.string(),
+    /** Small line above the name, e.g. "Stanford · Applied Intuition". */
+    eyebrow: z.string().default(''),
     /** The one line under your name. Keep it short. */
     tagline: z.string(),
     /** Used for <meta description> and link previews. */
     description: z.string(),
-    /** Where you work now. Rendered as a badge in the hero. */
+    /**
+     * The run-on credential line under the name. Each entry is one clause;
+     * entries with an `href` render in the accent colour as links, which is what
+     * gives the line its rhythm. Keep clauses short.
+     */
+    credentials: z
+      .array(z.object({ text: z.string(), href: z.string().url().optional() }))
+      .default([]),
+    /** Wordmarks in the strip under the hero. Text, not logo images. */
+    affiliations: z.array(z.string()).default([]),
+    /** Where you work now. */
     current: z
       .object({
         role: z.string(),
@@ -35,13 +47,20 @@ const projects = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/projects' }),
   schema: z.object({
     title: z.string(),
-    /** Free text: "2026", "2024–2025". Shown right-aligned. */
+    /** Free text: "2026", "2024–2025". Shown with the entry. */
     period: z.string(),
     section: z.enum(['research', 'ventures', 'earlier']),
-    /** One or two sentences. This is what shows on the homepage. */
+    /** One or two sentences. This is what shows in listings. */
     summary: z.string(),
     /** External link, if the project has one. */
-    href: z.string().optional(),
+    href: z.string().url().optional(),
+    /**
+     * Thumbnail path under public/. Defaults to the generated placeholder at
+     * /projects/<filename>.svg — drop your own image in and point this at it.
+     */
+    image: z.string().default(''),
+    /** Surfaced on the homepage. Everything else lives on /projects. */
+    featured: z.boolean().default(false),
     /** Lower sorts first within a section. */
     order: z.number().default(50),
     /** Set false to hide without deleting the file. */
@@ -49,4 +68,33 @@ const projects = defineCollection({
   }),
 });
 
-export const collections = { profile, projects };
+/**
+ * Research notes — one file per session, named by date.
+ *
+ * Filename becomes the URL, so `2026-08-15-diffusion-policy.md` lands at
+ * /notes/2026-08-15-diffusion-policy.
+ */
+const notes = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/notes' }),
+  schema: z.object({
+    title: z.string(),
+    /** Sorts the index, newest first. */
+    date: z.coerce.date(),
+    /** One line — what you'd tell someone who asked what you read today. */
+    summary: z.string().default(''),
+    /** The papers this session covered. */
+    papers: z
+      .array(
+        z.object({
+          title: z.string(),
+          href: z.string().url().optional(),
+          authors: z.string().optional(),
+        }),
+      )
+      .default([]),
+    tags: z.array(z.string()).default([]),
+    published: z.boolean().default(true),
+  }),
+});
+
+export const collections = { profile, projects, notes };

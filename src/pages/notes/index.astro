@@ -1,0 +1,63 @@
+---
+import Base from '../../layouts/Base.astro';
+import NoteRow from '../../components/NoteRow.astro';
+import Footer from '../../components/Footer.astro';
+import { getNotes, getProfile, navActions } from '../../lib/site';
+
+export const prerender = true;
+
+const profile = await getProfile();
+const notes = await getNotes();
+const { name } = profile.data;
+---
+
+<Base
+  title={`Research notes — ${name}`}
+  description="Notes on papers, written up as I read them."
+  navActions={navActions(profile)}
+>
+  <header class="head">
+    <h1>Research notes</h1>
+    <p class="head__note">Notes on papers, written up as I read them.</p>
+  </header>
+
+  {
+    notes.length > 0 ? (
+      <div class="list">
+        {notes.map((n) => (
+          <NoteRow entry={n} />
+        ))}
+      </div>
+    ) : (
+      <p class="empty">
+        Nothing published yet. Copy{' '}
+        <code>src/content/notes/2026-08-15-template.md</code>, rename it to
+        today's date, set <code>published: true</code>, and write.
+      </p>
+    )
+  }
+
+  <Footer name={name} />
+</Base>
+
+<style>
+  .head {
+    padding: var(--space-7) 0 0;
+  }
+
+  .head__note {
+    margin-top: var(--space-2);
+    color: var(--color-text-muted);
+  }
+
+  .list {
+    margin-top: var(--space-6);
+  }
+
+  .empty {
+    max-width: var(--width-prose);
+    margin-top: var(--space-6);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+</style>

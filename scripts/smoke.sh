@@ -20,13 +20,31 @@ echo "== public site =="
 chk "GET /  200"            "$(curl -s -o /dev/null -w %{http_code} $B/)" 200
 has "renders name"          "$(curl -s $B/)" "Adarsh Ambati"
 has "renders tagline"       "$(curl -s $B/)" "Robotics and physical intelligence"
-has "renders a project"     "$(curl -s $B/)" "Suturebot"
-has "renders company"       "$(curl -s $B/)" "Candor"
-has "renders earlier work"  "$(curl -s $B/)" "Gro-STEMs"
+has "hero eyebrow"          "$(curl -s $B/)" "Applied Intuition"
+has "credential line"       "$(curl -s $B/)" "YC W25"
+has "affiliation strip"     "$(curl -s $B/)" "Y Combinator"
+has "featured project"      "$(curl -s $B/)" "Suturebot"
 has "both emails present"   "$(curl -s $B/)" "adarsh1@stanford.edu"
 has "linkedin present"      "$(curl -s $B/)" "linkedin.com/in/adarshambati"
 chk "home is indexable"     "$(curl -s $B/ | grep -c noindex)" 0
 has "canonical set"         "$(curl -s $B/)" "adarshambati.com"
+has "hero visual present"   "$(curl -s $B/)" "data-hero-visual"
+# The homepage is a landing page: only featured entries, full list one click away.
+chk "home omits earlier work" "$(curl -s $B/ | grep -c 'Gro-STEMs')" 0
+has "home links to projects"  "$(curl -s $B/)" "View all projects"
+
+echo "== pages =="
+chk "GET /projects  200"    "$(curl -s -o /dev/null -w %{http_code} $B/projects)" 200
+has "lists earlier work"    "$(curl -s $B/projects)" "Gro-STEMs"
+has "lists companies"       "$(curl -s $B/projects)" "Candor"
+chk "os-vla is gone"        "$(curl -s $B/projects | grep -ci 'os-vla')" 0
+chk "GET /notes  200"       "$(curl -s -o /dev/null -w %{http_code} $B/notes)" 200
+chk "template is unpublished" "$(curl -s $B/notes | grep -c 'how these notes work')" 0
+chk "project detail 200"    "$(curl -s -o /dev/null -w %{http_code} $B/projects/suturebot)" 200
+has "detail shows cover"    "$(curl -s $B/projects/suturebot)" "/projects/suturebot.svg"
+chk "placeholder served"    "$(curl -s -o /dev/null -w %{http_code} $B/projects/suturebot.svg)" 200
+# The service worker is app-only: caching the marketing site served stale bundles.
+chk "no SW on public site"  "$(curl -s $B/ | grep -c 'serviceWorker')" 0
 
 echo "== gating =="
 chk "GET /todo redirects"   "$(curl -s -o /dev/null -w %{http_code} $B/todo)" 302

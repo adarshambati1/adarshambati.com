@@ -1,15 +1,31 @@
 ---
 name: Adarsh Ambati
+eyebrow: Stanford · Applied Intuition
 tagline: Robotics and physical intelligence
 description: >-
   Adarsh Ambati — software engineer at Applied Intuition working on robotics and
   physical intelligence. Previously co-founded Candor Security (YC W25) and Sophris.
+# The run-on line under the name. Entries with an href render in the accent
+# colour. Check the dates — I left off anything I couldn't verify.
+credentials:
+  - text: Stanford.
+  - text: Co-founder, Sophris (2024).
+  - text: Co-founder & CEO, Candor Security — YC W25.
+    href: https://candor.security/
+  - text: Software engineer, Applied Intuition (2026).
+    href: https://www.appliedintuition.com/
+affiliations:
+  - Applied Intuition
+  - Stanford
+  - Y Combinator
+  - Candor Security
+  - Sophris
 current:
   role: Software Engineer, Data Flywheel
   org: Applied Intuition
   href: https://www.appliedintuition.com/
 # Drop a square image in public/ and put its filename here, e.g. portrait.jpg.
-# Leave blank to render the page without one.
+# Leave blank to render the hero without one.
 portrait: ''
 emails:
   - adarsh.ambati1@gmail.com

@@ -2,6 +2,7 @@
 title: Auditing robot foundation model evaluation
 period: '2026'
 section: research
+featured: true
 order: 30
 href: https://github.com/adarshambati1/robot-fm-irt-audit
 summary: >-

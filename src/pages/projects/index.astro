@@ -1,0 +1,70 @@
+---
+import Base from '../../layouts/Base.astro';
+import Section from '../../components/Section.astro';
+import Card from '../../components/Card.astro';
+import Footer from '../../components/Footer.astro';
+import {
+  SECTIONS,
+  getProfile,
+  getProjects,
+  navActions,
+  projectImage,
+  projectTarget,
+} from '../../lib/site';
+
+export const prerender = true;
+
+const profile = await getProfile();
+const projects = await getProjects();
+const { name } = profile.data;
+---
+
+<Base
+  title={`Projects — ${name}`}
+  description="Research, companies, and earlier work."
+  navActions={navActions(profile)}
+>
+  <header class="head">
+    <h1>Projects</h1>
+    <p class="head__note">Research, companies, and earlier work.</p>
+  </header>
+
+  {
+    SECTIONS.map(({ key, id, title, note }) => {
+      const items = projects.filter((p) => p.data.section === key);
+      if (items.length === 0) return null;
+      const compact = key === 'earlier';
+      return (
+        <Section id={id} title={title} note={note} quiet={compact}>
+          {items.map((p) => {
+            const { href, internal } = projectTarget(p);
+            return (
+              <Card
+                title={p.data.title}
+                period={p.data.period}
+                summary={p.data.summary}
+                href={href}
+                internal={internal}
+                image={projectImage(p)}
+                compact={compact}
+              />
+            );
+          })}
+        </Section>
+      );
+    })
+  }
+
+  <Footer name={name} />
+</Base>
+
+<style>
+  .head {
+    padding: var(--space-7) 0 0;
+  }
+
+  .head__note {
+    margin-top: var(--space-2);
+    color: var(--color-text-muted);
+  }
+</style>

@@ -1,40 +1,48 @@
 ---
-/**
- * Sticky site header. Anchors are root-relative so they work from project
- * pages as well as the homepage.
- */
+/** Sticky site header: section links left of centre, contact actions right. */
 export interface NavLink {
   readonly label: string;
   readonly href: string;
-  readonly external?: boolean;
+}
+
+export interface NavAction {
+  readonly label: string;
+  readonly href: string;
+  /** Filled rather than outlined. Use for the single primary action. */
+  readonly primary?: boolean;
 }
 
 interface Props {
   name: string;
   links?: readonly NavLink[];
+  actions?: readonly NavAction[];
 }
 
 const DEFAULT_LINKS: readonly NavLink[] = [
-  { label: 'Research', href: '/#research' },
-  { label: 'Companies', href: '/#companies' },
-  { label: 'Contact', href: '/#contact' },
+  { label: 'Projects', href: '/projects' },
+  { label: 'Notes', href: '/notes' },
 ];
 
-const { name, links = DEFAULT_LINKS } = Astro.props;
+const { name, links = DEFAULT_LINKS, actions = [] } = Astro.props;
+const path = Astro.url.pathname;
+
+/** Marks the section you're in, including its child pages. */
+const isCurrent = (href: string): boolean => href !== '/' && path.startsWith(href);
 ---
 
 <header class="nav">
   <div class="nav__inner">
     <a class="nav__brand" href="/">{name}</a>
-    <nav aria-label="Primary">
+
+    <nav class="nav__sections" aria-label="Primary">
       <ul class="nav__list">
         {
           links.map((link) => (
             <li>
               <a
-                class="nav__link"
+                class:list={['nav__link', { 'nav__link--current': isCurrent(link.href) }]}
                 href={link.href}
-                {...(link.external ? { rel: 'me noopener', target: '_blank' } : {})}
+                aria-current={isCurrent(link.href) ? 'page' : undefined}
               >
                 {link.label}
               </a>
@@ -43,6 +51,25 @@ const { name, links = DEFAULT_LINKS } = Astro.props;
         }
       </ul>
     </nav>
+
+    {
+      actions.length > 0 && (
+        <ul class="nav__actions">
+          {actions.map((action) => (
+            <li>
+              <a
+                class:list={['pill', { 'pill--primary': action.primary }]}
+                href={action.href}
+                rel="me noopener"
+              >
+                {action.label}
+                {action.primary && <span aria-hidden="true"> &rarr;</span>}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
   </div>
 </header>
 
@@ -59,8 +86,7 @@ const { name, links = DEFAULT_LINKS } = Astro.props;
   .nav__inner {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-5);
+    gap: var(--space-6);
     max-width: var(--width-content);
     height: var(--header-height);
     margin: 0 auto;
@@ -74,11 +100,21 @@ const { name, links = DEFAULT_LINKS } = Astro.props;
     white-space: nowrap;
   }
 
-  .nav__list {
+  .nav__sections {
+    flex: 1;
+  }
+
+  .nav__list,
+  .nav__actions {
     display: flex;
+    align-items: center;
     gap: var(--space-5);
     list-style: none;
     padding: 0;
+  }
+
+  .nav__actions {
+    gap: var(--space-2);
   }
 
   .nav__link {
@@ -87,18 +123,58 @@ const { name, links = DEFAULT_LINKS } = Astro.props;
     text-decoration: none;
   }
 
-  .nav__link:hover {
+  .nav__link:hover,
+  .nav__link--current {
     color: var(--color-text);
   }
 
-  /* On a narrow screen drop Contact, not the work. Contact sits at the bottom
-     of a page people scroll anyway; the project sections are the reason to
-     navigate at all. */
-  @media (max-width: 30rem) {
-    .nav__list {
+  .pill {
+    display: inline-block;
+    padding: 0.4rem 0.85rem;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    color: var(--color-accent);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+    border-radius: 999px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--transition), border-color var(--transition);
+  }
+
+  .pill:hover {
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+    border-color: var(--color-accent);
+  }
+
+  .pill--primary {
+    color: #fff;
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  .pill--primary:hover {
+    color: #fff;
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+
+  /* Below this the brand plus two pills fills the bar; the section links are a
+     scroll away on a page people scroll anyway. */
+  @media (max-width: 40rem) {
+    .nav__inner {
       gap: var(--space-4);
     }
-    .nav__list li:last-child {
+    .nav__sections {
+      display: none;
+    }
+    .nav__actions {
+      margin-left: auto;
+    }
+  }
+
+  @media (max-width: 24rem) {
+    .nav__actions li:first-child {
       display: none;
     }
   }
