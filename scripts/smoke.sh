@@ -43,8 +43,13 @@ has "home links to projects"  "$(curl -s $B/)" "View all projects"
 
 echo "== pages =="
 chk "GET /projects  200"    "$(curl -s -o /dev/null -w %{http_code} $B/projects)" 200
-has "lists earlier work"    "$(curl -s $B/projects)" "Gro-STEMs"
+has "lists small projects"  "$(curl -s $B/projects)" "Gro-STEMs"
 has "lists companies"       "$(curl -s $B/projects)" "Candor"
+has "lists new finds"       "$(curl -s $B/projects)" "Drone or No Drone"
+has "lists the todo app"    "$(curl -s $B/projects)" "Personal Todos For the Engineer"
+# Alternating bands: at least one flipped, and small entries stay compact.
+has "alternating layout"    "$(curl -s $B/projects)" "feature--flip"
+has "small list is compact" "$(curl -s $B/projects)" "row--compact"
 chk "os-vla is gone"        "$(curl -s $B/projects | grep -ci 'os-vla')" 0
 chk "GET /notes  200"       "$(curl -s -o /dev/null -w %{http_code} $B/notes)" 200
 chk "template is unpublished" "$(curl -s $B/notes | grep -c 'how these notes work')" 0

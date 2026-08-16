@@ -1,7 +1,8 @@
 ---
 title: Candor Security
 period: '2024–2025'
-section: ventures
+scale: big
+kind: company
 featured: true
 order: 10
 href: https://candor.security/

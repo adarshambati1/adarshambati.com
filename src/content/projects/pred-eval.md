@@ -1,8 +1,9 @@
 ---
 title: Predicting benchmark outcomes without running the model
 period: '2026'
-section: research
-order: 40
+scale: small
+kind: research
+order: 30
 href: https://github.com/adarshambati1/pred-eval-competition
 summary: >-
   Estimating whether a model answers a benchmark item correctly without ever

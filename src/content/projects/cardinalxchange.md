@@ -1,7 +1,8 @@
 ---
 title: CardinalXchange
 period: '2026'
-section: earlier
+scale: big
+kind: build
 order: 10
 href: https://github.com/adarshambati1/cardinalXchange
 summary: >-

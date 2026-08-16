@@ -1,7 +1,8 @@
 ---
 title: VitalView
 period: '2025'
-section: earlier
+scale: big
+kind: build
 order: 20
 href: https://github.com/adarshambati1/VitalView
 summary: >-

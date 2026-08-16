@@ -1,7 +1,8 @@
 ---
 title: Suturebot
 period: '2026'
-section: research
+scale: big
+kind: research
 featured: true
 order: 10
 href: https://github.com/adarshambati1/Suturebot

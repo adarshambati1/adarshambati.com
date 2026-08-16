@@ -1,0 +1,172 @@
+---
+/**
+ * A big project: image on one side, copy on the other, sides alternating down
+ * the page.
+ *
+ * The alternation is what stops a long list of image-plus-text blocks reading
+ * as a template. It's purely visual, so on narrow screens it collapses to a
+ * single column and the image always leads — flipping order on mobile would
+ * put some captions above their images and some below for no reason.
+ */
+interface Props {
+  title: string;
+  period: string;
+  summary: string;
+  image: string;
+  /** Internal page if the project has a write-up, else the external link. */
+  href?: string | undefined;
+  internal?: boolean;
+  /** Even indices put the image left; odd ones flip it. */
+  flip?: boolean;
+  kind?: string;
+}
+
+const { title, period, summary, image, href, internal = false, flip = false, kind } = Astro.props;
+const cue = internal ? 'Read more' : 'Visit';
+---
+
+<article class:list={['feature', { 'feature--flip': flip }]}>
+  <div class="feature__media">
+    <img src={image} alt="" width="1200" height="750" loading="lazy" decoding="async" />
+  </div>
+
+  <div class="feature__body">
+    <p class="feature__meta">
+      {kind && <span class="feature__kind">{kind}</span>}
+      <span class="u-mono-nums">{period}</span>
+    </p>
+
+    <h3 class="feature__title">
+      {
+        href ? (
+          <a class="feature__link" href={href} {...(internal ? {} : { rel: 'noopener' })}>
+            {title}
+          </a>
+        ) : (
+          title
+        )
+      }
+    </h3>
+
+    <p class="feature__summary">{summary}</p>
+
+    {href && <span class="feature__cue">{cue} &rarr;</span>}
+  </div>
+</article>
+
+<style>
+  .feature {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    align-items: center;
+    gap: var(--space-7);
+    padding: var(--space-7) 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .feature:last-child {
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  /* Only the visual order flips; the DOM order stays image-then-copy so the
+     reading order is identical either way. */
+  .feature--flip .feature__media {
+    order: 2;
+  }
+
+  .feature__media {
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+  }
+
+  .feature__media img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 10;
+    object-fit: cover;
+    transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .feature:hover .feature__media img {
+    transform: scale(1.03);
+  }
+
+  .feature__meta {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--color-text-subtle);
+  }
+
+  .feature__kind {
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .feature__title {
+    margin-top: var(--space-2);
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+  }
+
+  .feature__link {
+    text-decoration: none;
+  }
+
+  /* Stretches the title link over the whole band, so one link covers it
+     without nesting interactive elements. */
+  .feature__link::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .feature:hover .feature__title {
+    color: var(--color-accent);
+  }
+
+  .feature__summary {
+    margin-top: var(--space-3);
+    color: var(--color-text-muted);
+  }
+
+  .feature__cue {
+    display: inline-block;
+    margin-top: var(--space-4);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--color-text-subtle);
+    transition: color var(--transition);
+  }
+
+  .feature:hover .feature__cue {
+    color: var(--color-accent);
+  }
+
+  @media (max-width: 46rem) {
+    .feature {
+      grid-template-columns: 1fr;
+      gap: var(--space-4);
+      padding: var(--space-6) 0;
+    }
+    /* Image always first on narrow screens — see the note above. */
+    .feature--flip .feature__media {
+      order: 0;
+    }
+    .feature__title {
+      font-size: var(--text-xl);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .feature__media img,
+    .feature:hover .feature__media img {
+      transition: none;
+      transform: none;
+    }
+  }
+</style>

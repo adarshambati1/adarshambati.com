@@ -12,20 +12,18 @@ export type Project = CollectionEntry<'projects'>;
 export type Note = CollectionEntry<'notes'>;
 export type Profile = CollectionEntry<'profile'>;
 
-export type SectionKey = Project['data']['section'];
+export type Scale = Project['data']['scale'];
+export type Kind = Project['data']['kind'];
 
-export interface SectionSpec {
-  readonly key: SectionKey;
-  readonly id: string;
-  readonly title: string;
-  readonly note?: string;
-}
+export const KIND_LABEL: Readonly<Record<Kind, string>> = {
+  research: 'Research',
+  company: 'Company',
+  build: 'Build',
+};
 
-export const SECTIONS: readonly SectionSpec[] = [
-  { key: 'research', id: 'research', title: 'Research' },
-  { key: 'ventures', id: 'companies', title: 'Companies' },
-  { key: 'earlier', id: 'earlier', title: 'Earlier', note: 'Work from before the robotics turn.' },
-];
+/** Research first, then companies, then everything else. */
+const KIND_RANK: readonly Kind[] = ['research', 'company', 'build'];
+const kindRank = (k: Kind): number => KIND_RANK.indexOf(k);
 
 export async function getProfile(): Promise<Profile> {
   const [profile] = await getCollection('profile');
@@ -33,32 +31,16 @@ export async function getProfile(): Promise<Profile> {
   return profile;
 }
 
-/** Section display order, used to rank entries that cross sections. */
-const sectionRank = (key: SectionKey): number => SECTIONS.findIndex((s) => s.key === key);
-
 export async function getProjects(): Promise<Project[]> {
   const all = await getCollection('projects');
   return all
     .filter((p) => p.data.published)
-    .sort((a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title));
-}
-
-/**
- * The homepage selection, ranked across sections rather than within one.
- *
- * `order` is scoped to a section, so sorting featured entries by it alone lets a
- * company tie with research and win on alphabetical tiebreak — which put Candor
- * above Suturebot on a page about robotics.
- */
-export async function getFeatured(limit = 3): Promise<Project[]> {
-  const all = await getProjects();
-  return all
-    .filter((p) => p.data.featured)
     .sort(
       (a, b) =>
-        sectionRank(a.data.section) - sectionRank(b.data.section) || a.data.order - b.data.order,
-    )
-    .slice(0, limit);
+        kindRank(a.data.kind) - kindRank(b.data.kind) ||
+        a.data.order - b.data.order ||
+        a.data.title.localeCompare(b.data.title),
+    );
 }
 
 /** Newest first. */
@@ -69,20 +51,42 @@ export async function getNotes(): Promise<Note[]> {
     .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 }
 
+/** Big projects, in display order. */
+export const bigProjects = (all: readonly Project[]): Project[] =>
+  all.filter((p) => p.data.scale === 'big');
+
+/** Everything else — the compact list. */
+export const smallProjects = (all: readonly Project[]): Project[] =>
+  all.filter((p) => p.data.scale === 'small');
+
 /**
- * Where a project's title should link.
- *
- * A written-up project gets its own page; one without a body links straight
- * out, so there are no stub pages that just repeat the summary.
+ * Only big projects earn a page of their own, and only once they have a body.
+ * A stub page repeating a one-line summary helps nobody.
  */
+export const hasOwnPage = (p: Project): boolean =>
+  p.data.scale === 'big' && Boolean(p.body?.trim());
+
+/** Where a project's title should link: its own page, or straight out. */
 export function projectTarget(p: Project): { href: string | undefined; internal: boolean } {
-  if (p.body?.trim()) return { href: `/projects/${p.id}`, internal: true };
+  if (hasOwnPage(p)) return { href: `/projects/${p.id}`, internal: true };
   return { href: p.data.href, internal: false };
 }
 
 /** Explicit image if set, else the generated placeholder for that slug. */
 export function projectImage(p: Project): string {
   return p.data.image || `/projects/${p.id}.svg`;
+}
+
+/**
+ * The homepage selection, ranked across kinds rather than within one.
+ *
+ * `order` is scoped to a kind, so sorting featured entries by it alone lets a
+ * company tie with research and win on an alphabetical tiebreak — which once
+ * put Candor above Suturebot on a page about robotics.
+ */
+export async function getFeatured(limit = 3): Promise<Project[]> {
+  const all = await getProjects();
+  return all.filter((p) => p.data.featured).slice(0, limit);
 }
 
 /** Icon buttons in the hero. Falls back gracefully if a link is absent. */

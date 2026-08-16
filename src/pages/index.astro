@@ -4,12 +4,13 @@ import Base from '../layouts/Base.astro';
 import HeroFull from '../components/HeroFull.astro';
 import Affiliations from '../components/Affiliations.astro';
 import Section from '../components/Section.astro';
-import Card from '../components/Card.astro';
+import ProjectFeature from '../components/ProjectFeature.astro';
 import NoteRow from '../components/NoteRow.astro';
 import LinkList from '../components/LinkList.astro';
 import Prose from '../components/Prose.astro';
 import Footer from '../components/Footer.astro';
 import {
+  KIND_LABEL,
   getProfile,
   getFeatured,
   getNotes,
@@ -52,16 +53,18 @@ const recentNotes = (await getNotes()).slice(0, 3);
   {
     featured.length > 0 && (
       <Section id="projects" title="Projects" note="A few things I've built.">
-        {featured.map((p) => {
+        {featured.map((p, i) => {
           const { href, internal } = projectTarget(p);
           return (
-            <Card
+            <ProjectFeature
               title={p.data.title}
               period={p.data.period}
               summary={p.data.summary}
+              image={projectImage(p)}
+              kind={KIND_LABEL[p.data.kind]}
               href={href}
               internal={internal}
-              image={projectImage(p)}
+              flip={i % 2 === 1}
             />
           );
         })}

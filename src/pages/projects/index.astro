@@ -1,58 +1,79 @@
 ---
 import Base from '../../layouts/Base.astro';
-import Section from '../../components/Section.astro';
+import ProjectFeature from '../../components/ProjectFeature.astro';
 import Card from '../../components/Card.astro';
 import Footer from '../../components/Footer.astro';
 import {
-  SECTIONS,
+  KIND_LABEL,
+  bigProjects,
   getProfile,
   getProjects,
   navActions,
   projectImage,
   projectTarget,
+  smallProjects,
 } from '../../lib/site';
 
 export const prerender = true;
 
 const profile = await getProfile();
-const projects = await getProjects();
+const all = await getProjects();
+const big = bigProjects(all);
+const small = smallProjects(all);
 const { name } = profile.data;
 ---
 
 <Base
   title={`Projects — ${name}`}
-  description="Research, companies, and earlier work."
+  description="Research, companies, and smaller builds."
   navActions={navActions(profile)}
 >
   <header class="head">
     <h1>Projects</h1>
-    <p class="head__note">Research, companies, and earlier work.</p>
+    <p class="head__note">Research, companies, and the smaller things.</p>
   </header>
 
   {
-    SECTIONS.map(({ key, id, title, note }) => {
-      const items = projects.filter((p) => p.data.section === key);
-      if (items.length === 0) return null;
-      const compact = key === 'earlier';
-      return (
-        <Section id={id} title={title} note={note} quiet={compact}>
-          {items.map((p) => {
-            const { href, internal } = projectTarget(p);
-            return (
-              <Card
-                title={p.data.title}
-                period={p.data.period}
-                summary={p.data.summary}
-                href={href}
-                internal={internal}
-                image={projectImage(p)}
-                compact={compact}
-              />
-            );
-          })}
-        </Section>
-      );
-    })
+    big.length > 0 && (
+      <section class="features">
+        {big.map((p, i) => {
+          const { href, internal } = projectTarget(p);
+          return (
+            <ProjectFeature
+              title={p.data.title}
+              period={p.data.period}
+              summary={p.data.summary}
+              image={projectImage(p)}
+              kind={KIND_LABEL[p.data.kind]}
+              href={href}
+              internal={internal}
+              flip={i % 2 === 1}
+            />
+          );
+        })}
+      </section>
+    )
+  }
+
+  {
+    small.length > 0 && (
+      <section class="small">
+        <h2 class="small__title">Smaller things</h2>
+        <p class="small__note">
+          Experiments, coursework and one-offs. These link straight out rather than to a
+          page of their own.
+        </p>
+        {small.map((p) => (
+          <Card
+            title={p.data.title}
+            period={p.data.period}
+            summary={p.data.summary}
+            href={p.data.href}
+            compact
+          />
+        ))}
+      </section>
+    )
   }
 
   <Footer name={name} />
@@ -60,11 +81,26 @@ const { name } = profile.data;
 
 <style>
   .head {
-    padding: var(--space-7) 0 0;
+    padding: var(--space-7) 0 var(--space-6);
   }
 
   .head__note {
     margin-top: var(--space-2);
     color: var(--color-text-muted);
+  }
+
+  .small {
+    margin-top: var(--space-9);
+  }
+
+  .small__title {
+    font-size: var(--text-2xl);
+  }
+
+  .small__note {
+    max-width: var(--width-prose);
+    margin: var(--space-2) 0 var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--color-text-subtle);
   }
 </style>

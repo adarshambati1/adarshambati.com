@@ -1,9 +1,10 @@
 ---
 title: Auditing robot foundation model evaluation
 period: '2026'
-section: research
+scale: big
+kind: research
 featured: true
-order: 30
+order: 20
 href: https://github.com/adarshambati1/robot-fm-irt-audit
 summary: >-
   A psychometric audit of how the field measures robot foundation models —

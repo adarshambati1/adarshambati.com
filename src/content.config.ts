@@ -51,7 +51,14 @@ const projects = defineCollection({
     title: z.string(),
     /** Free text: "2026", "2024–2025". Shown with the entry. */
     period: z.string(),
-    section: z.enum(['research', 'ventures', 'earlier']),
+    /**
+     * Big projects get an alternating image band and their own page. Small
+     * ones are a compact list that links straight out — a stub page repeating
+     * a one-line summary helps nobody.
+     */
+    scale: z.enum(['big', 'small']).default('small'),
+    /** Grouping within a scale. */
+    kind: z.enum(['research', 'company', 'build']).default('build'),
     /** One or two sentences. This is what shows in listings. */
     summary: z.string(),
     /** External link, if the project has one. */

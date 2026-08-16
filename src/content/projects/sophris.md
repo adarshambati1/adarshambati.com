@@ -1,7 +1,8 @@
 ---
 title: Sophris
 period: '2024'
-section: ventures
+scale: big
+kind: company
 order: 20
 summary: >-
   AI for electrical engineering — checking circuit-board schematics in seconds
