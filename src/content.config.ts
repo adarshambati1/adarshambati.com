@@ -106,4 +106,21 @@ const notes = defineCollection({
   }),
 });
 
-export const collections = { profile, projects, notes };
+/**
+ * Thoughts — short original writing, not tied to a paper or a project.
+ * One file per post, named by date, same URL scheme as notes.
+ */
+const thoughts = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/thoughts' }),
+  schema: z.object({
+    title: z.string(),
+    /** Sorts the index, newest first. */
+    date: z.coerce.date(),
+    /** One line — the hook, shown in the listing. */
+    summary: z.string().default(''),
+    tags: z.array(z.string()).default([]),
+    published: z.boolean().default(true),
+  }),
+});
+
+export const collections = { profile, projects, notes, thoughts };

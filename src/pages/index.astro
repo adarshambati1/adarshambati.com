@@ -6,6 +6,7 @@ import Affiliations from '../components/Affiliations.astro';
 import Section from '../components/Section.astro';
 import ProjectFeature from '../components/ProjectFeature.astro';
 import NoteRow from '../components/NoteRow.astro';
+import ThoughtRow from '../components/ThoughtRow.astro';
 import LinkList from '../components/LinkList.astro';
 import Prose from '../components/Prose.astro';
 import Footer from '../components/Footer.astro';
@@ -14,6 +15,7 @@ import {
   getProfile,
   getFeatured,
   getNotes,
+  getThoughts,
   heroLinks,
   navActions,
   projectImage,
@@ -31,6 +33,7 @@ const { name, eyebrow, tagline, location, description, credentials, affiliations
    full lists a click away. */
 const featured = await getFeatured(3);
 const recentNotes = (await getNotes()).slice(0, 3);
+const recentThoughts = (await getThoughts()).slice(0, 3);
 ---
 
 <Base title={`${name} — ${tagline}`} description={description} navActions={navActions(profile)}>
@@ -77,12 +80,25 @@ const recentNotes = (await getNotes()).slice(0, 3);
 
   {
     recentNotes.length > 0 && (
-      <Section id="notes" title="Research notes" note="Notes from what I read.">
+      <Section id="notes" title="Notes on interests" note="Notes on papers, grouped by topic.">
         {recentNotes.map((n) => (
           <NoteRow entry={n} />
         ))}
         <p class="more">
           <a href="/notes">View all notes &rarr;</a>
+        </p>
+      </Section>
+    )
+  }
+
+  {
+    recentThoughts.length > 0 && (
+      <Section id="thoughts" title="Thoughts" note="The latest essays.">
+        {recentThoughts.map((t) => (
+          <ThoughtRow entry={t} />
+        ))}
+        <p class="more">
+          <a href="/thoughts">View all thoughts &rarr;</a>
         </p>
       </Section>
     )

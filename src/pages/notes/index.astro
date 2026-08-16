@@ -2,37 +2,45 @@
 import Base from '../../layouts/Base.astro';
 import NoteRow from '../../components/NoteRow.astro';
 import Footer from '../../components/Footer.astro';
-import { getNotes, getProfile, navActions } from '../../lib/site';
+import { getNotes, getProfile, groupNotesByTopic, navActions } from '../../lib/site';
 
 export const prerender = true;
 
 const profile = await getProfile();
-const notes = await getNotes();
+const topics = groupNotesByTopic(await getNotes());
 const { name } = profile.data;
 ---
 
 <Base
-  title={`Research notes — ${name}`}
-  description="Notes on papers, written up as I read them."
+  title={`Notes on interests — ${name}`}
+  description="Notes on papers, grouped by topic, written up as I read them."
   navActions={navActions(profile)}
 >
   <header class="head">
-    <h1>Research notes</h1>
-    <p class="head__note">Notes on papers, written up as I read them.</p>
+    <h1>Notes on interests</h1>
+    <p class="head__note">Grouped by topic. Notes on papers, written up as I read them.</p>
   </header>
 
   {
-    notes.length > 0 ? (
-      <div class="list">
-        {notes.map((n) => (
-          <NoteRow entry={n} />
+    topics.length > 0 ? (
+      <div class="topics">
+        {topics.map((topic) => (
+          <section class="topic">
+            <h2 class="topic__label">{topic.label}</h2>
+            <div class="list">
+              {topic.notes.map((n) => (
+                <NoteRow entry={n} />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     ) : (
       <p class="empty">
         Nothing published yet. Copy{' '}
-        <code>src/content/notes/2026-08-15-template.md</code>, rename it to
-        today's date, set <code>published: true</code>, and write.
+        <code>src/content/notes/example-topic/2026-08-15-template.md</code>{' '}
+        into a new or existing topic folder, rename it to today's date, set{' '}
+        <code>published: true</code>, and write.
       </p>
     )
   }
@@ -50,8 +58,24 @@ const { name } = profile.data;
     color: var(--color-text-muted);
   }
 
+  .topics {
+    margin-top: var(--space-7);
+  }
+
+  .topic + .topic {
+    margin-top: var(--space-8);
+  }
+
+  .topic__label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
   .list {
-    margin-top: var(--space-6);
+    margin-top: var(--space-3);
   }
 
   .empty {

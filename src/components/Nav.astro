@@ -19,15 +19,19 @@ interface Props {
 }
 
 const DEFAULT_LINKS: readonly NavLink[] = [
-  { label: 'Projects', href: '/projects' },
-  { label: 'Notes', href: '/notes' },
+  { label: 'Projects', href: '/#projects' },
+  { label: 'Notes on Interests', href: '/notes' },
+  { label: 'Thoughts', href: '/thoughts' },
 ];
 
 const { name, links = DEFAULT_LINKS, actions = [] } = Astro.props;
 const path = Astro.url.pathname;
 
-/** Marks the section you're in, including its child pages. */
-const isCurrent = (href: string): boolean => href !== '/' && path.startsWith(href);
+/** Marks the section you're in, including its child pages. Anchor links
+ *  (Projects, scrolling to a section of the homepage) never get a
+ *  "current" state — there's no separate page to be "in". */
+const isCurrent = (href: string): boolean =>
+  !href.includes('#') && href !== '/' && path.startsWith(href);
 ---
 
 <header class="nav">

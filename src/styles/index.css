@@ -78,7 +78,7 @@
 
   /* ---------- layout ----------------------------------------------------- */
 
-  --width-content: 42rem;
+  --width-content: 50rem;
   /* ~68 characters in Hanken Grotesk at 16px — top of the comfortable range. */
   --width-prose: 34rem;
   --header-height: 3.75rem;

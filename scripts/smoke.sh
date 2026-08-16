@@ -53,6 +53,11 @@ has "small list is compact" "$(curl -s $B/projects)" "row--compact"
 chk "os-vla is gone"        "$(curl -s $B/projects | grep -ci 'os-vla')" 0
 chk "GET /notes  200"       "$(curl -s -o /dev/null -w %{http_code} $B/notes)" 200
 chk "template is unpublished" "$(curl -s $B/notes | grep -c 'how these notes work')" 0
+chk "GET /thoughts  200"    "$(curl -s -o /dev/null -w %{http_code} $B/thoughts)" 200
+chk "thought tmpl unpublished" "$(curl -s $B/thoughts | grep -c 'how thoughts work')" 0
+has "nav: projects anchors home" "$(curl -s $B/)" 'href="/#projects"'
+has "nav: notes on interests"    "$(curl -s $B/)" '>Notes on Interests<'
+has "nav: thoughts"              "$(curl -s $B/)" 'href="/thoughts"'
 chk "project detail 200"    "$(curl -s -o /dev/null -w %{http_code} $B/projects/suturebot)" 200
 has "detail shows cover"    "$(curl -s $B/projects/suturebot)" "/projects/suturebot.svg"
 chk "placeholder served"    "$(curl -s -o /dev/null -w %{http_code} $B/projects/suturebot.svg)" 200

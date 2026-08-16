@@ -1,0 +1,63 @@
+---
+import Base from '../../layouts/Base.astro';
+import ThoughtRow from '../../components/ThoughtRow.astro';
+import Footer from '../../components/Footer.astro';
+import { getThoughts, getProfile, navActions } from '../../lib/site';
+
+export const prerender = true;
+
+const profile = await getProfile();
+const thoughts = await getThoughts();
+const { name } = profile.data;
+---
+
+<Base
+  title={`Thoughts — ${name}`}
+  description="The latest essays — short, original, not tied to a project or a paper."
+  navActions={navActions(profile)}
+>
+  <header class="head">
+    <h1>Thoughts</h1>
+    <p class="head__note">The latest essays, newest first.</p>
+  </header>
+
+  {
+    thoughts.length > 0 ? (
+      <div class="list">
+        {thoughts.map((t) => (
+          <ThoughtRow entry={t} />
+        ))}
+      </div>
+    ) : (
+      <p class="empty">
+        Nothing published yet. Copy{' '}
+        <code>src/content/thoughts/2026-08-15-template.md</code>, rename it to
+        today's date, set <code>published: true</code>, and write.
+      </p>
+    )
+  }
+
+  <Footer name={name} />
+</Base>
+
+<style>
+  .head {
+    padding: var(--space-7) 0 0;
+  }
+
+  .head__note {
+    margin-top: var(--space-2);
+    color: var(--color-text-muted);
+  }
+
+  .list {
+    margin-top: var(--space-6);
+  }
+
+  .empty {
+    max-width: var(--width-prose);
+    margin-top: var(--space-6);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+</style>

@@ -4,59 +4,37 @@ import type { GetStaticPaths } from 'astro';
 import Base from '../../layouts/Base.astro';
 import Prose from '../../components/Prose.astro';
 import Footer from '../../components/Footer.astro';
-import { formatDate, getProfile, navActions, type Note } from '../../lib/site';
+import { formatDate, getProfile, navActions, type Thought } from '../../lib/site';
 
 export const prerender = true;
 
 export const getStaticPaths: GetStaticPaths = async () => {
-  const notes = await getCollection('notes');
-  return notes
-    .filter((n) => n.data.published)
-    .map((n) => ({ params: { slug: n.id }, props: { entry: n } }));
+  const thoughts = await getCollection('thoughts');
+  return thoughts
+    .filter((t) => t.data.published)
+    .map((t) => ({ params: { slug: t.id }, props: { entry: t } }));
 };
 
 interface Props {
-  entry: Note;
+  entry: Thought;
 }
 
 const { entry } = Astro.props;
 const { Content } = await render(entry);
-const { title, date, summary, papers, tags } = entry.data;
+const { title, date, summary, tags } = entry.data;
 
 const profile = await getProfile();
 ---
 
-<Base title={`${title} — Notes on interests`} description={summary} navActions={navActions(profile)}>
+<Base title={`${title} — Thoughts`} description={summary} navActions={navActions(profile)}>
   <article>
-    <p class="back"><a href="/notes">&larr; All notes</a></p>
+    <p class="back"><a href="/thoughts">&larr; All thoughts</a></p>
 
     <header class="head">
       <time class="head__date u-mono-nums" datetime={date.toISOString()}>{formatDate(date)}</time>
       <h1>{title}</h1>
       {summary && <p class="head__summary">{summary}</p>}
     </header>
-
-    {
-      papers.length > 0 && (
-        <section class="papers">
-          <h2 class="papers__label">Papers</h2>
-          <ul class="papers__list">
-            {papers.map((p) => (
-              <li>
-                {p.href ? (
-                  <a href={p.href} rel="noopener">
-                    {p.title}
-                  </a>
-                ) : (
-                  <span>{p.title}</span>
-                )}
-                {p.authors && <span class="papers__authors"> — {p.authors}</span>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )
-    }
 
     <Prose><Content /></Prose>
 
@@ -100,36 +78,6 @@ const profile = await getProfile();
     font-size: var(--text-lg);
     line-height: var(--leading-snug);
     color: var(--color-text-muted);
-  }
-
-  .papers {
-    max-width: var(--width-prose);
-    margin-bottom: var(--space-6);
-    padding: var(--space-4);
-    background: var(--color-surface);
-    border-radius: var(--radius-md);
-  }
-
-  .papers__label {
-    font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
-    letter-spacing: var(--tracking-wide);
-    text-transform: uppercase;
-    color: var(--color-text-subtle);
-  }
-
-  .papers__list {
-    margin-top: var(--space-2);
-    padding-left: var(--space-4);
-    font-size: var(--text-sm);
-  }
-
-  .papers__list li + li {
-    margin-top: var(--space-1);
-  }
-
-  .papers__authors {
-    color: var(--color-text-subtle);
   }
 
   .tags {

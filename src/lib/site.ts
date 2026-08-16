@@ -10,6 +10,7 @@ import type { NavAction } from '../components/Nav.astro';
 
 export type Project = CollectionEntry<'projects'>;
 export type Note = CollectionEntry<'notes'>;
+export type Thought = CollectionEntry<'thoughts'>;
 export type Profile = CollectionEntry<'profile'>;
 
 export type Scale = Project['data']['scale'];
@@ -48,6 +49,50 @@ export async function getNotes(): Promise<Note[]> {
   const all = await getCollection('notes');
   return all
     .filter((n) => n.data.published)
+    .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+}
+
+export interface NoteTopic {
+  /** Folder name as it appears on disk — stable, used for keys/links. */
+  slug: string;
+  /** Humanized for display: "diffusion-policy" -> "Diffusion Policy". */
+  label: string;
+  notes: Note[];
+}
+
+/**
+ * Notes live in topic folders (`src/content/notes/<topic>/*.md`), so the
+ * index groups by folder rather than showing one long chronological feed.
+ * A note directly in `content/notes/` with no folder falls back to a single
+ * "General" group, so nothing disappears if the convention isn't followed.
+ */
+export function groupNotesByTopic(notes: readonly Note[]): NoteTopic[] {
+  const groups = new Map<string, Note[]>();
+  for (const note of notes) {
+    const slug = note.id.includes('/') ? note.id.split('/')[0]! : 'general';
+    const list = groups.get(slug);
+    if (list) list.push(note);
+    else groups.set(slug, [note]);
+  }
+
+  const humanize = (slug: string): string =>
+    slug === 'general'
+      ? 'General'
+      : slug
+          .split('-')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ');
+
+  return [...groups.entries()]
+    .map(([slug, list]) => ({ slug, label: humanize(slug), notes: list }))
+    .sort((a, b) => b.notes[0]!.data.date.getTime() - a.notes[0]!.data.date.getTime());
+}
+
+/** Newest first. */
+export async function getThoughts(): Promise<Thought[]> {
+  const all = await getCollection('thoughts');
+  return all
+    .filter((t) => t.data.published)
     .sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
 }
 
