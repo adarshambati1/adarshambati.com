@@ -64,119 +64,33 @@ must report 0 errors.
 
 ## The todo app
 
-Lives at `/todo`, and at `todo.adarshambati.com` via a middleware rewrite — same
-deployment, same code. The subdomain exists so the app gets its own home-screen
-identity instead of living at a path.
+It used to live here at `/todo`. It's now its own repo and its own deployment:
+**[todo.adarshambati.com](https://github.com/adarshambati1/todo.adarshambati.com)**
 
-**Local-first.** The UI reads only from IndexedDB and never awaits the network.
-Offline isn't a mode, it's sync not having run yet.
-
-**Sync.** Every row carries a server-assigned monotonic `seq`. A client
-remembers the highest it has seen and asks for everything above it — a change
-token, not a timestamp cursor, so there's no dependence on device clocks for
-ordering and no boundary bug when two records share a millisecond.
-
-Clocks are still used, but only for conflict resolution and **per field**.
-Checking a box on your phone while editing the same task's title on your laptop
-merges cleanly; per-record last-write-wins would discard one of the two.
-
-Deletes are tombstones. A hard delete is invisible to a device that was offline
-when it happened.
-
-```
-POST /api/sync   { cursor, changes[] }  ->  { cursor, changes[] }
-```
-
-The response includes the post-merge version of the caller's own writes, so
-clients converge without special-casing.
-
-## Auth
-
-Google OAuth with an email allowlist. No signup, no password, no user table —
-exactly the addresses in `ALLOWED_EMAILS` get in, and the allowlist is
-re-checked on every request, so removing one takes effect immediately rather
-than at session expiry.
-
-The point isn't hiding a todo list from a determined attacker. It's that an
-unauthenticated app is an open write endpoint on the internet, and Certificate
-Transparency logs get scraped within minutes of a cert issuing.
-
-Two credentials, deliberately separate:
-
-- **Session cookie** — browsers. Signed, `HttpOnly`, `SameSite=Lax`, one year.
-  Writes additionally require a matching `Origin`, because browsers attach
-  cookies to cross-site requests whether you meant it or not.
-- **Bearer token** (`SHORTCUTS_TOKEN`) — iOS Shortcuts, which can't perform an
-  OAuth flow. Exempt from the origin check, since non-browser clients don't send
-  `Origin` at all. Separate from the session because it sits in plaintext inside
-  an iCloud-synced shortcut and must be rotatable on its own.
-
-Astro's built-in `checkOrigin` is disabled in `astro.config.mjs` because it
-rejects *every* non-GET without an `Origin`, which would break Shortcuts. The
-equivalent check is reimplemented in `src/middleware.ts`, applied only where
-it's load-bearing.
-
-## Siri, share sheet, and Apple Watch
-
-A PWA can't register with Siri — App Intents is native-only. Shortcuts bridges
-it by calling the API directly, so Apple Reminders is never involved.
-
-**"What's on my list"** — Get Contents of URL → `GET /api/list?format=text` with
-header `Authorization: Bearer <SHORTCUTS_TOKEN>` → Speak Text. Siri invokes any
-shortcut by its name.
-
-**"Add to my list"** — Ask for Input → `POST /api/quick-add`, same header, body
-is the dictated text. Accepts raw text or `{"title": "..."}`.
-
-Enable "receive input from share sheet" on the second one for share-to-todo.
-Shortcuts runs on watchOS, so both work from your wrist.
-
-## PWA install
-
-Manifests are per-page, so the site serves two: `/` installs the site, `/todo`
-installs an app that cold-launches into the list. Install from the page you want
-the icon to open — landing on a homepage and navigating every time is enough
-friction to kill the habit.
-
-iOS web push requires the PWA be added to the home screen; it does not work from
-a Safari tab.
+Split because it's about to grow a board, a timetable and an agent, and because
+publishing a research note shouldn't redeploy an authed app — nor should a bug
+in that app stop the site updating. The two share `src/styles/index.css` by
+copy, which keeps them visually identical without a package for one person.
 
 ## Environment
 
-See `.env.example`. In production these are set in the Vercel dashboard, never
-in a file.
-
-| Variable | What it's for |
-| --- | --- |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth client, from Google Cloud Console |
-| `ALLOWED_EMAILS` | Comma-separated allowlist |
-| `AUTH_SECRET` | Signs the session cookie (`openssl rand -hex 32`) |
-| `SHORTCUTS_TOKEN` | Bearer token for Siri (`openssl rand -hex 32`) |
-| `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | Blank locally — falls back to a SQLite file in `data/` |
-
-Authorised OAuth redirect URIs must include
-`http://localhost:4321/api/auth/callback` and
-`https://todo.adarshambati.com/api/auth/callback`.
+None. The site is content and a hero animation — no database, no auth, no
+secrets. `.env.example` exists only because the dev script reads a file if one
+is present.
 
 ## Deploying
 
-Vercel, not GitHub Pages — Pages is static-only and can't run the sync API or an
-OAuth callback.
-
-Storage is libSQL rather than a local SQLite file because Vercel's filesystem is
-ephemeral. The same client speaks to a local file in development and Turso in
-production, so there's one code path.
+Vercel. Every page is prerendered, so GitHub Pages would also work now that the
+app has moved out — Vercel is kept for the shared toolchain and preview deploys.
 
 ## Testing
 
 ```bash
 npm run dev            # one terminal
-bash scripts/smoke.sh  # another
+npm test               # another
 ```
 
-64 checks: public rendering, route gating, the OAuth handshake, the sync
-protocol, field-level merge, tombstones, the Siri endpoints, and PWA wiring. The
-Google round-trip itself isn't covered — it needs a real browser and account.
+36 checks: rendering, content collections, the hero scenes, and PWA wiring.
 
 `npm run verify` runs `astro check` (strictest), the build, and the arm safety
 test together.

@@ -6,8 +6,6 @@ import type { NavLink, NavAction } from '../components/Nav.astro';
 interface Props {
   title: string;
   description?: string | undefined;
-  /** Which manifest this page advertises — decides what an install becomes. */
-  manifest?: 'site' | 'todo';
   noindex?: boolean;
   /** Header brand text. Omit the nav entirely by passing navLinks: []. */
   brand?: string;
@@ -18,7 +16,6 @@ interface Props {
 const {
   title,
   description,
-  manifest = 'site',
   noindex = false,
   brand = 'Adarsh Ambati',
   navLinks,
@@ -55,11 +52,7 @@ const hasBleed: boolean = Astro.slots.has('bleed');
       )
     }
 
-    <!--
-      Manifests are per-page, not per-site. Installing from / gives you the site;
-      installing from the todo app gives an icon that opens straight to the list.
-    -->
-    <link rel="manifest" href={`/manifest-${manifest}.webmanifest`} />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/icon-180.png" />
     <link rel="icon" href="/icons/icon-192.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -76,23 +69,6 @@ const hasBleed: boolean = Astro.slots.has('bleed');
     <main class:list={['page', { 'page--offset': !hasBleed }]}>
       <slot />
     </main>
-    {
-      /*
-        Only the todo app registers the service worker, and never in dev.
-        It exists so the app works offline; the public site gains nothing from
-        it and, because dev module URLs aren't content-hashed, a cache-first
-        worker there serves stale JS and CSS on every reload.
-      */
-      manifest === 'todo' && import.meta.env.PROD && (
-        <script is:inline>
-          if ('serviceWorker' in navigator) {
-            addEventListener('load', () =>
-              navigator.serviceWorker.register('/sw.js').catch(() => {}),
-            );
-          }
-        </script>
-      )
-    }
   </body>
 </html>
 

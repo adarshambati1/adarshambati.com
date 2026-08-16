@@ -7,8 +7,6 @@ const { name } = Astro.props;
 const year: number = new Date().getFullYear();
 ---
 
-<!-- No link to /todo here: it's a private app, and a dead-end sign-in link on a
-     public page reads like a leaked internal route. -->
 <footer class="footer">
   <span>&copy; {year} {name}</span>
 </footer>
