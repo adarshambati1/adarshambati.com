@@ -6,7 +6,7 @@
 #   npm test               # in another
 #
 # The todo app moved to its own repo and has its own suite:
-# https://github.com/adarshambati1/todo.adarshambati.com
+# https://github.com/adarshambati1/kanbantime
 cd "$(dirname "$0")/.." || exit 1
 B=${BASE_URL:-http://localhost:4321}
 pass=0; fail=0

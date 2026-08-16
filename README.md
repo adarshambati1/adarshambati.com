@@ -65,7 +65,8 @@ must report 0 errors.
 ## The todo app
 
 It used to live here at `/todo`. It's now its own repo and its own deployment:
-**[todo.adarshambati.com](https://github.com/adarshambati1/todo.adarshambati.com)**
+**[Kanban Time](https://github.com/adarshambati1/kanbantime)**, deployed at
+`todo.adarshambati.com`
 
 Split because it's about to grow a board, a timetable and an agent, and because
 publishing a research note shouldn't redeploy an authed app — nor should a bug

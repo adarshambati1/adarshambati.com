@@ -15,7 +15,7 @@ These need sign-ins, so they can't be done for you.
 
 ## Todo app
 
-Moved to its own repo: **todo.adarshambati.com**. Its board, timetable and agent
+Moved to its own repo: **[kanbantime](https://github.com/adarshambati1/kanbantime)**, deployed at `todo.adarshambati.com`. Its board, timetable and agent
 work is tracked in that repo's README, not here.
 
 Its deployment is separate and is where the Google OAuth client and the Turso

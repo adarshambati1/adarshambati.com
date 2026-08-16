@@ -4,7 +4,7 @@ period: '2026'
 scale: small
 kind: build
 order: 10
-href: https://github.com/adarshambati1/todo.adarshambati.com
+href: https://github.com/adarshambati1/kanbantime
 summary: >-
   A local-first todo app that had to work on a locked-down corporate laptop, so
   it's a PWA. Reads from IndexedDB and never awaits the network; syncs with a
